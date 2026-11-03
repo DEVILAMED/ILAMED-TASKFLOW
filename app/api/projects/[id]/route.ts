@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
-import { invalidateProjectsForUser } from "@/services/projectService";
 import { accessibleProjectWhere } from "@/project-access";
 import { canManageProject } from "@/lib/project-task-permissions";
 
@@ -90,18 +89,6 @@ export async function DELETE(
         { status: 404 },
       );
     }
-
-    const userIdsToInvalidate = new Set([
-      user.id,
-      ...project.members.map((member) => member.userId),
-      ...(project.team?.memberships.map((member) => member.userId) ?? []),
-    ]);
-
-    await Promise.all(
-      Array.from(userIdsToInvalidate).map((userId) =>
-        invalidateProjectsForUser(userId),
-      ),
-    );
 
     return NextResponse.json({ ok: true });
   } catch (error) {

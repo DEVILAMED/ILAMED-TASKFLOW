@@ -1,7 +1,6 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { cacheDel, cacheGet, cacheSet } from "@/lib/cache";
 
 type TaskSummary = {
   id: string;
@@ -26,19 +25,9 @@ type TaskSummary = {
   } | null;
 };
 
-const TASKS_TTL_SECONDS = 60;
-
-const tasksCacheKey = (projectId: string) => `tasks:project:${projectId}`;
-
 export async function listTasksByProject(
   projectId: string,
 ): Promise<TaskSummary[]> {
-  const cacheKey = tasksCacheKey(projectId);
-  const cached = await cacheGet<TaskSummary[]>(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
   const tasks = await prisma.task.findMany({
     where: {
       projectId,
@@ -89,11 +78,5 @@ export async function listTasksByProject(
     sprint: task.sprint,
   }));
 
-  await cacheSet(cacheKey, normalized, TASKS_TTL_SECONDS);
-
   return normalized;
-}
-
-export async function invalidateTasksByProject(projectId: string) {
-  await cacheDel(tasksCacheKey(projectId));
 }

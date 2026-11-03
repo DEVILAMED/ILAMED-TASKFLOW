@@ -1,7 +1,6 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { cacheDel, cacheGet, cacheSet } from "@/lib/cache";
 import { accessibleProjectWhere } from "@/project-access";
 
 type ProjectSummary = {
@@ -18,19 +17,9 @@ type ProjectSummary = {
   memberCount: number;
 };
 
-const PROJECTS_TTL_SECONDS = 60;
-
-const projectsCacheKey = (userId: string) => `projects:user:${userId}`;
-
 export async function listProjectsForUser(
   userId: string,
 ): Promise<ProjectSummary[]> {
-  const cacheKey = projectsCacheKey(userId);
-  const cached = await cacheGet<ProjectSummary[]>(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
   const projects = await prisma.project.findMany({
     where: accessibleProjectWhere(userId),
     orderBy: {
@@ -82,11 +71,5 @@ export async function listProjectsForUser(
     };
   });
 
-  await cacheSet(cacheKey, normalized, PROJECTS_TTL_SECONDS);
-
   return normalized;
-}
-
-export async function invalidateProjectsForUser(userId: string) {
-  await cacheDel(projectsCacheKey(userId));
 }

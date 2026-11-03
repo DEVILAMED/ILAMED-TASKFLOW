@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { accessibleProjectWhere } from "@/project-access";
-import { invalidateProjectsForUser } from "@/services/projectService";
 import { canManageProject } from "@/lib/project-task-permissions";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -19,8 +18,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     select: {
       id: true,
       ownerId: true,
-      team: { select: { memberships: { select: { userId: true, role: true } } } },
       members: { select: { userId: true } },
+      team: { select: { memberships: { select: { userId: true, role: true } } } },
     },
   });
   if (!project) {
@@ -51,22 +50,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
   }
 
-  const updatedProject = await prisma.project.update({
+  await prisma.project.update({
     where: { id: projectId },
     data: { teamId },
-    select: {
-      members: { select: { userId: true } },
-      team: { select: { memberships: { select: { userId: true } } } },
-    },
   });
-  const userIds = new Set([
-    user.id,
-    ...project.members.map((member) => member.userId),
-    ...(project.team?.memberships.map((member) => member.userId) ?? []),
-    ...updatedProject.members.map((member) => member.userId),
-    ...(updatedProject.team?.memberships.map((member) => member.userId) ?? []),
-  ]);
-  await Promise.all(Array.from(userIds, (userId) => invalidateProjectsForUser(userId)));
 
   return NextResponse.json({ ok: true });
 }

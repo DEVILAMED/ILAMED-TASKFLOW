@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { invalidateProjectsForUser } from "@/services/projectService";
 import { accessibleProjectWhere } from "@/project-access";
 import { canManageProject } from "@/lib/project-task-permissions";
 
@@ -65,10 +64,6 @@ export async function POST(request: Request, { params }: RouteContext) {
   await prisma.membership.create({
     data: { projectId, userId: member.id, role: "MEMBER" },
   });
-  await Promise.all([
-    invalidateProjectsForUser(user.id),
-    invalidateProjectsForUser(member.id),
-  ]);
   return NextResponse.json({ ok: true, member }, { status: 201 });
 }
 
@@ -114,10 +109,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     });
   });
 
-  await Promise.all([
-    invalidateProjectsForUser(user.id),
-    invalidateProjectsForUser(newOwnerId),
-  ]);
   return NextResponse.json({ ok: true });
 }
 
@@ -153,9 +144,5 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   await prisma.membership.delete({
     where: { userId_projectId: { userId: memberId, projectId } },
   });
-  await Promise.all([
-    invalidateProjectsForUser(user.id),
-    invalidateProjectsForUser(memberId),
-  ]);
   return NextResponse.json({ ok: true });
 }

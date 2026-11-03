@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { invalidateProjectsForUser } from "@/services/projectService";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -55,7 +54,6 @@ export async function POST(request: Request, { params }: RouteContext) {
   await prisma.teamMembership.create({
     data: { teamId, userId: member.id, role: "MEMBER" },
   });
-  await invalidateProjectsForUser(member.id);
 
   return NextResponse.json({ ok: true, member }, { status: 201 });
 }
@@ -145,7 +143,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
   });
 
-  await invalidateProjectsForUser(memberId);
   return NextResponse.json({ ok: true });
 }
 
@@ -206,6 +203,5 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     }
   });
 
-  await invalidateProjectsForUser(memberId);
   return NextResponse.json({ ok: true });
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { invalidateTasksByProject } from "@/services/taskService";
 import { accessibleTaskWhere } from "@/project-access";
 import { canManageProject, canManageProjectTasks } from "@/lib/project-task-permissions";
 import { recordActiveSprintProgress } from "@/services/sprint-progress";
@@ -407,7 +406,6 @@ export async function PATCH(
     return nextTask;
   });
 
-  await invalidateTasksByProject(task.projectId);
   await recordActiveSprintProgress(task.projectId);
 
   return NextResponse.json({ ok: true, task: updatedTask });
@@ -475,7 +473,6 @@ export async function DELETE(
     },
   });
 
-  await invalidateTasksByProject(task.projectId);
   await recordActiveSprintProgress(task.projectId);
 
   return NextResponse.json({ ok: true });

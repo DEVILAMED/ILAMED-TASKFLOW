@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import {
-  invalidateProjectsForUser,
-  listProjectsForUser,
-} from "@/services/projectService";
+import { listProjectsForUser } from "@/services/projectService";
 
 type ProjectPayload = {
   title?: string;
@@ -74,8 +71,6 @@ export async function POST(request: Request) {
       createdAt: true,
     },
   });
-
-  await invalidateProjectsForUser(user.id);
 
   return NextResponse.json({ ok: true, project }, { status: 201 });
 }

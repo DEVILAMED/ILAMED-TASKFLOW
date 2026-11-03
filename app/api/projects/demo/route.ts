@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { invalidateProjectsForUser } from "@/services/projectService";
 import { getDemoProjectId } from "@/services/demo-project";
 
 function daysFromToday(days: number) {
@@ -233,6 +232,5 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: "Unable to create the example project. Please try again." }, { status: 500 });
   }
 
-  await invalidateProjectsForUser(user.id);
   return NextResponse.json({ ok: true, projectId, existing: false }, { status: 201 });
 }

@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import {
-  invalidateTasksByProject,
-  listTasksByProject,
-} from "@/services/taskService";
+import { listTasksByProject } from "@/services/taskService";
 import { accessibleProjectWhere } from "@/project-access";
 import { canManageProjectTasks } from "@/lib/project-task-permissions";
 import { recordActiveSprintProgress } from "@/services/sprint-progress";
@@ -304,7 +301,6 @@ export async function POST(request: Request) {
     return createdTask;
   });
 
-  await invalidateTasksByProject(projectId);
   await recordActiveSprintProgress(projectId);
 
   return NextResponse.json({ ok: true, task }, { status: 201 });
