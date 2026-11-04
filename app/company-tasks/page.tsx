@@ -36,7 +36,10 @@ export default async function CompanyTasksPage() {
     <WorkspaceShell
       title="My assigned tasks"
       currentWorkspace="projects"
-      navItems={[{ href: "/company-tasks", label: "My tasks", icon: "board", active: true }]}
+      navItems={[
+        { href: "/company-tasks", label: "My tasks", icon: "board", active: true },
+        { href: "/reports", label: "Reports", icon: "reports" },
+      ]}
       userName={user.name || user.email}
       userEmail={user.email}
       userAction={<LogoutButton />}

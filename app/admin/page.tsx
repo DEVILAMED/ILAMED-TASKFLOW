@@ -48,6 +48,7 @@ export default async function AdminPage() {
       currentWorkspace="projects"
       navItems={[
         { href: "/admin", label: "Tasks", icon: "board", active: true },
+        { href: "/reports", label: "Reports", icon: "reports" },
         { href: "#employees", label: "Employees", icon: "team", badge: String(users.length) },
       ]}
       userName={currentUser.name || currentUser.email}
