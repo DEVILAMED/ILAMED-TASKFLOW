@@ -7,9 +7,19 @@ import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 
 const STATUS_ROWS = [
   { key: "TODO", label: "Not started", color: "bg-slate-400" },
+  { key: "ACCEPTED", label: "Accepted", color: "bg-indigo-400" },
   { key: "IN_PROGRESS", label: "In progress", color: "bg-sky-400" },
-  { key: "DONE", label: "Completed", color: "bg-emerald-400" },
+  { key: "ON_HOLD", label: "On hold", color: "bg-amber-400" },
+  { key: "SUBMITTED_FOR_REVIEW", label: "Awaiting review", color: "bg-violet-400" },
+  { key: "REVISION_REQUESTED", label: "Revision requested", color: "bg-orange-400" },
+  { key: "APPROVED", label: "Approved", color: "bg-emerald-400" },
+  { key: "REJECTED", label: "Rejected", color: "bg-rose-400" },
+  { key: "CANCELLED", label: "Cancelled", color: "bg-slate-500" },
+  { key: "DONE", label: "Legacy completed", color: "bg-teal-400" },
 ] as const;
+
+const completedStatus = (status: string) => status === "APPROVED" || status === "DONE";
+const terminalStatus = (status: string) => completedStatus(status) || status === "CANCELLED" || status === "REJECTED";
 
 const PRIORITY_ROWS = [
   { key: "HIGH", label: "High", color: "bg-rose-400" },
@@ -42,10 +52,17 @@ export default async function ReportsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  const managerMemberships = user.role === "MANAGER"
+    ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })
+    : [];
+  const managerMembers = managerMemberships.length
+    ? await prisma.teamMembership.findMany({ where: { teamId: { in: managerMemberships.map((membership) => membership.teamId) } }, select: { userId: true } })
+    : [];
+  const reportAssigneeIds = [...new Set([user.id, ...managerMembers.map((membership) => membership.userId)])];
   const tasks = await prisma.task.findMany({
     where: {
       projectId: COMPANY_TASK_PROJECT_ID,
-      ...(user.role === "ADMIN" ? {} : { assigneeId: user.id }),
+      ...(user.role === "ADMIN" ? {} : { assigneeId: { in: user.role === "MANAGER" ? reportAssigneeIds : [user.id] } }),
     },
     select: {
       id: true,
@@ -63,12 +80,12 @@ export default async function ReportsPage() {
   const nextWeek = new Date(todayDate);
   nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
   const nextWeekKey = nextWeek.toISOString().slice(0, 10);
-  const completed = tasks.filter((task) => task.status === "DONE").length;
+  const completed = tasks.filter((task) => completedStatus(task.status)).length;
   const overdue = tasks.filter(
-    (task) => task.status !== "DONE" && task.dueDate && dueDayKey(task.dueDate) < today,
+    (task) => !terminalStatus(task.status) && task.dueDate && dueDayKey(task.dueDate) < today,
   ).length;
   const dueSoon = tasks.filter((task) => {
-    if (task.status === "DONE" || !task.dueDate) return false;
+    if (terminalStatus(task.status) || !task.dueDate) return false;
     const dueDay = dueDayKey(task.dueDate);
     return dueDay >= today && dueDay <= nextWeekKey;
   }).length;
@@ -97,14 +114,14 @@ export default async function ReportsPage() {
       completed: 0,
     };
     current.total += 1;
-    if (task.status === "DONE") current.completed += 1;
+    if (completedStatus(task.status)) current.completed += 1;
     assigneeMap.set(id, current);
   }
   const assignees = [...assigneeMap.values()].sort(
     (left, right) => right.total - left.total || left.name.localeCompare(right.name),
   );
   const tasksToWatch = tasks
-    .filter((task) => task.status !== "DONE" && task.dueDate && dueDayKey(task.dueDate) <= nextWeekKey)
+    .filter((task) => !terminalStatus(task.status) && task.dueDate && dueDayKey(task.dueDate) <= nextWeekKey)
     .sort((left, right) => left.dueDate!.getTime() - right.dueDate!.getTime())
     .slice(0, 6);
 

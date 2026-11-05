@@ -4,6 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceSwitcher } from "@/app/workspace-switcher";
+import NotificationsInbox from "@/app/notifications-inbox";
+import ThemeToggle from "@/app/theme-toggle";
+import GlobalSearch from "@/app/global-search";
+import { CalendarDays, Check, Folder, Inbox, List, Plus, Search, Share2, Star, Sun, X, type LucideIcon } from "lucide-react";
 
 type TodoList = {
   id: string;
@@ -103,40 +107,12 @@ function Icon({
   name: "sun" | "star" | "calendar" | "inbox" | "search" | "plus" | "list" | "folder" | "check" | "close" | "share";
   className?: string;
 }) {
-  const common = {
-    className,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.7,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true as const,
+  const icons: Record<typeof name, LucideIcon> = {
+    sun: Sun, star: Star, calendar: CalendarDays, inbox: Inbox, search: Search,
+    plus: Plus, list: List, folder: Folder, check: Check, close: X, share: Share2,
   };
-  switch (name) {
-    case "sun":
-      return <svg {...common}><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg>;
-    case "star":
-      return <svg {...common}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>;
-    case "calendar":
-      return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>;
-    case "inbox":
-      return <svg {...common}><path d="M4 4h16l2 11v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-4L4 4Z" /><path d="M2 15h5l2 3h6l2-3h5" /></svg>;
-    case "search":
-      return <svg {...common}><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>;
-    case "plus":
-      return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
-    case "folder":
-      return <svg {...common}><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z" /></svg>;
-    case "check":
-      return <svg {...common}><path d="m5 12 4 4L19 6" /></svg>;
-    case "close":
-      return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
-    case "share":
-      return <svg {...common}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.7 10.7 6.6-4.4m-6.6 7 6.6 4.4" /></svg>;
-    case "list":
-      return <svg {...common}><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>;
-  }
+  const IconComponent = icons[name];
+  return <IconComponent className={className} size={20} strokeWidth={1.7} aria-hidden="true" />;
 }
 
 export default function TodoWorkspace({
@@ -468,7 +444,7 @@ export default function TodoWorkspace({
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="todo-sidebar flex w-full shrink-0 flex-col px-4 py-5 lg:min-h-screen lg:w-[272px] lg:px-5">
           <Link href="/" className="block w-fit max-w-full rounded bg-white">
-            <Image src="/ilamed-logo.png" alt="ILAMED — Institute of Laser & Aesthetic Medicine" width={2327} height={768} className="h-auto w-full max-w-[232px] object-contain" priority />
+            <Image src="/company-logo.png" alt="ILAMED International institutional logo" width={2164} height={746} className="h-auto w-full max-w-[232px] object-contain" priority />
           </Link>
 
           <div className="mt-7 flex items-center gap-3 rounded-2xl bg-white/70 p-3">
@@ -560,25 +536,17 @@ export default function TodoWorkspace({
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
               {search ? <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><Icon name="close" className="h-4 w-4" /></button> : null}
             </label>
-            <button
+            <div className="flex items-center gap-2"><GlobalSearch /><NotificationsInbox /><ThemeToggle /><button
               type="button"
               onClick={async () => {
-                if (!("Notification" in window)) {
-                  setError("This browser does not support desktop notifications.");
-                  return;
-                }
+                if (!("Notification" in window)) { setError("This browser does not support desktop notifications."); return; }
                 const permission = await Notification.requestPermission();
                 setRemindersEnabled(permission === "granted");
-                if (permission !== "granted") {
-                  setError("Allow notifications in your browser to receive reminders while ILAMED is open.");
-                } else {
-                  setError(null);
-                }
+                if (permission !== "granted") setError("Allow notifications in your browser to receive reminders while ILAMED is open.");
+                else setError(null);
               }}
               className="todo-secondary-button shrink-0"
-            >
-              {remindersEnabled ? "Reminders on" : "Enable reminders"}
-            </button>
+            >{remindersEnabled ? "Reminders on" : "Enable reminders"}</button></div>
           </header>
 
           <div className="flex min-h-0 flex-1">

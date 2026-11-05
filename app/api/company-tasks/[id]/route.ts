@@ -30,10 +30,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: "Unsupported task update." }, { status: 400 });
   }
   if (user.role !== UserRole.ADMIN && (submittedKeys.length !== 1 || submittedKeys[0] !== "status")) {
-    return NextResponse.json({ ok: false, error: "Employees can update task status only." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Only administrators can change assignment or priority." }, { status: 403 });
   }
-  if (status !== undefined && (typeof status !== "string" || !Object.values(TaskStatus).includes(status as TaskStatus))) {
+  const employeeStatuses: TaskStatus[] = [TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS, TaskStatus.ON_HOLD, TaskStatus.SUBMITTED_FOR_REVIEW, TaskStatus.REVISION_REQUESTED];
+  if (status !== undefined && (typeof status !== "string" || (user.role === UserRole.ADMIN ? status !== TaskStatus.CANCELLED : !employeeStatuses.includes(status as TaskStatus)))) {
     return NextResponse.json({ ok: false, error: "Choose a valid task status." }, { status: 400 });
+  }
+  if (status !== undefined && user.role === UserRole.ADMIN && status !== TaskStatus.CANCELLED) {
+    return NextResponse.json({ ok: false, error: "Use the review action to approve or request changes." }, { status: 400 });
   }
   if (priority !== undefined && user.role !== UserRole.ADMIN) {
     return NextResponse.json({ ok: false, error: "Only administrators can change task priority." }, { status: 403 });
@@ -72,9 +76,23 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         projectId: COMPANY_TASK_PROJECT_ID,
         ...(user.role === UserRole.ADMIN ? {} : { assigneeId: user.id }),
       },
-      select: { id: true, title: true, assigneeId: true },
+      select: { id: true, title: true, assigneeId: true, status: true },
     });
     if (!existing) return null;
+
+    if (status !== undefined) {
+      const allowedNext: Partial<Record<TaskStatus, TaskStatus[]>> = {
+        [TaskStatus.TODO]: [TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS],
+        [TaskStatus.ACCEPTED]: [TaskStatus.IN_PROGRESS, TaskStatus.ON_HOLD],
+        [TaskStatus.IN_PROGRESS]: [TaskStatus.ON_HOLD, TaskStatus.SUBMITTED_FOR_REVIEW],
+        [TaskStatus.ON_HOLD]: [TaskStatus.IN_PROGRESS],
+        [TaskStatus.REVISION_REQUESTED]: [TaskStatus.IN_PROGRESS, TaskStatus.SUBMITTED_FOR_REVIEW],
+      };
+      const permitted = user.role === UserRole.ADMIN
+        ? status === TaskStatus.CANCELLED && existing.status !== TaskStatus.APPROVED && existing.status !== TaskStatus.CANCELLED
+        : allowedNext[existing.status]?.includes(status as TaskStatus) === true;
+      if (!permitted) return { transitionError: true as const };
+    }
 
     const updated = await tx.task.update({
       where: { id: existing.id },
@@ -100,6 +118,30 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         },
       },
     });
+
+    if (status !== undefined) {
+      await tx.taskStatusHistory.create({
+        data: { taskId: existing.id, actorId: user.id, fromStatus: existing.status, toStatus: status as TaskStatus },
+      });
+      if (status === TaskStatus.SUBMITTED_FOR_REVIEW) {
+        await tx.taskSubmission.create({
+          data: { taskId: existing.id, submittedById: user.id },
+        });
+        const managers = existing.assigneeId
+          ? await tx.teamMembership.findMany({
+              where: { userId: existing.assigneeId, team: { memberships: { some: { userId: { not: existing.assigneeId }, role: "MANAGER" } } } },
+              select: { team: { select: { memberships: { where: { role: "MANAGER" }, select: { userId: true } } } } },
+            })
+          : [];
+        const managerIds = [...new Set(managers.flatMap((membership) => membership.team.memberships.map((item) => item.userId)))];
+        if (managerIds.length) {
+          await tx.notification.createMany({ data: managerIds.map((managerId) => ({
+            userId: managerId, actorId: user.id, projectId: COMPANY_TASK_PROJECT_ID, taskId: existing.id,
+            type: "TASK_SUBMITTED" as const, message: `${user.name || user.email} submitted "${existing.title}" for review`, href: "/reports",
+          })) });
+        }
+      }
+    }
 
     if (nextAssigneeId !== undefined && nextAssigneeId !== existing.assigneeId) {
       const notifications = [];
@@ -136,6 +178,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   if (!task) {
     return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
+  }
+
+  if ("transitionError" in task) {
+    return NextResponse.json({ ok: false, error: "That status transition is not allowed." }, { status: 409 });
   }
 
   return NextResponse.json({ ok: true, task });

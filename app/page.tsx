@@ -2,20 +2,22 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import { getCurrentUser } from "@/lib/auth";
 import HomeAuthPanel from "@/app/home-auth-panel";
+import ThemeToggle from "@/app/theme-toggle";
 
 export default async function Home() {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === "ADMIN" ? "/admin" : "/company-tasks");
+  if (user) redirect(user.role === "ADMIN" ? "/admin" : user.role === "MANAGER" ? "/manager" : "/company-tasks");
 
   return (
-    <main className="home-theme flex min-h-screen items-center px-5 py-8 sm:px-8 sm:py-12">
+    <main className="home-theme relative flex min-h-screen items-center px-5 py-8 sm:px-8 sm:py-12">
+      <div className="absolute right-5 top-5"><ThemeToggle /></div>
       <div className="mx-auto grid w-full max-w-6xl items-center gap-8 lg:grid-cols-2 lg:gap-16">
         <section className="flex flex-col items-center text-center lg:items-start lg:text-left">
           <Image
-            src="/ilamed-logo.png"
-            alt="ILAMED — Institute of Laser & Aesthetic Medicine"
-            width={2327}
-            height={768}
+            src="/company-logo.png"
+            alt="ILAMED International institutional logo"
+            width={2164}
+            height={746}
             className="h-auto w-[min(80vw,420px)] object-contain"
             priority
           />

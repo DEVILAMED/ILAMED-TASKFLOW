@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Bell } from "lucide-react";
 
 type InboxNotification = {
   id: string;
@@ -103,9 +104,7 @@ export default function NotificationsInbox() {
         }}
         className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-indigo-200 hover:text-indigo-700"
       >
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <Bell aria-hidden="true" size={18} strokeWidth={1.7} />
         {unreadCount > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-bold text-white">
             {unreadCount > 99 ? "99+" : unreadCount}

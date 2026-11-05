@@ -4,20 +4,16 @@ import type { ReactNode } from "react";
 import { WorkspaceSwitcher } from "@/app/workspace-switcher";
 import NotificationsInbox from "@/app/notifications-inbox";
 import PresenceHeartbeat from "@/app/presence-heartbeat";
+import GlobalSearch from "@/app/global-search";
+import ThemeToggle from "@/app/theme-toggle";
+import { Activity, BarChart3, Columns3, FolderKanban, Home, LayoutDashboard, Menu, UsersRound } from "lucide-react";
 
 export type WorkspaceNavItem = {
   href: string;
   label: string;
   badge?: string;
   active?: boolean;
-  icon:
-    | "dashboard"
-    | "folder"
-    | "activity"
-    | "team"
-    | "reports"
-    | "home"
-    | "board";
+  icon: "dashboard" | "folder" | "activity" | "team" | "reports" | "home" | "board";
 };
 
 type WorkspaceShellProps = {
@@ -31,175 +27,82 @@ type WorkspaceShellProps = {
   children: ReactNode;
 };
 
-function ShellIcon({ icon }: { icon: WorkspaceNavItem["icon"] }) {
-  switch (icon) {
-    case "folder":
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <path d="M1.5 4.5C1.5 3.67 2.17 3 3 3h3l1.5 1.5H12c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5H3c-.83 0-1.5-.67-1.5-1.5v-6Z" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      );
-    case "activity":
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <polyline points="1,9 4,4.5 7,9.5 10,5 14,8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </svg>
-      );
-    case "team":
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M1 13c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          <circle cx="11" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M13 12c0-1.5-1-2.5-2-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      );
-    case "reports":
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <rect x="1.5" y="1.5" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M4.5 9.5V11M7.5 7v4M10.5 4.5v6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      );
-    case "home":
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <path d="M2.2 6.4 7.5 2.4l5.3 4v5.1c0 .66-.54 1.2-1.2 1.2H3.4c-.66 0-1.2-.54-1.2-1.2V6.4Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-          <path d="M5.7 12.7V8.8h3.6v3.9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      );
-    case "board":
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <rect x="1.8" y="2" width="3.2" height="10.8" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="5.9" y="2" width="3.2" height="7.6" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="10" y="2" width="3.2" height="9.2" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      );
-    case "dashboard":
-    default:
-      return (
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-          <rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      );
+function NavIcon({ name }: { name: WorkspaceNavItem["icon"] }) {
+  switch (name) {
+    case "team": return <UsersRound size={17} strokeWidth={1.8} />;
+    case "folder": return <FolderKanban size={17} strokeWidth={1.8} />;
+    case "activity": return <Activity size={17} strokeWidth={1.8} />;
+    case "reports": return <BarChart3 size={17} strokeWidth={1.8} />;
+    case "home": return <Home size={17} strokeWidth={1.8} />;
+    case "board": return <Columns3 size={17} strokeWidth={1.8} />;
+    case "dashboard": return <LayoutDashboard size={17} strokeWidth={1.8} />;
   }
 }
 
-export function WorkspaceShell({
-  title,
-  currentWorkspace,
-  navItems,
-  userName,
-  userEmail,
-  userAction,
-  topbarRight,
-  children,
-}: WorkspaceShellProps) {
+function groupLabel(item: WorkspaceNavItem) {
+  if (["Employees", "Departments", "Teams"].includes(item.label) || item.label.toLowerCase().includes("department")) return "People";
+  if (["Reports", "Analytics", "Performance"].includes(item.label)) return "Insights";
+  if (["Projects", "Reviews", "Review queue"].includes(item.label)) return "Work management";
+  return "Workspace";
+}
+
+function NavigationGroups({ items }: { items: WorkspaceNavItem[] }) {
+  const groups = new Map<string, WorkspaceNavItem[]>();
+  for (const item of items) {
+    const group = groupLabel(item);
+    groups.set(group, [...(groups.get(group) ?? []), item]);
+  }
+  return <div className="grid gap-5">{["Workspace", "Work management", "People", "Insights"].map((group) => {
+    const groupedItems = groups.get(group);
+    if (!groupedItems?.length) return null;
+    return <section key={group}>
+      <h2 className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.13em] text-[var(--subtle)]">{group}</h2>
+      <div className="grid gap-0.5">{groupedItems.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} className={`workspace-nav-item group ${item.active ? "workspace-nav-active" : ""}`}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"><NavIcon name={item.icon} /></span><span className="flex-1">{item.label}</span>{item.badge ? <span className="rounded-md bg-[var(--panel-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted)]">{item.badge}</span> : null}
+      </Link>)}</div>
+    </section>;
+  })}</div>;
+}
+
+export function WorkspaceShell({ title, currentWorkspace, navItems, userName, userEmail, userAction, topbarRight, children }: WorkspaceShellProps) {
   const initials = (userName || userEmail || "U").slice(0, 2).toUpperCase();
+  return <div className="workspace-theme min-h-screen lg:flex">
+    <PresenceHeartbeat />
+    <aside className="workspace-sidebar hidden w-[250px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex lg:h-screen">
+      <Link href="/" className="flex h-[68px] shrink-0 items-center gap-2 border-b px-3">
+        <Image src="/company-logo.png" alt="ILAMED International institutional logo" width={2164} height={746} className="h-auto w-[125px] shrink-0 object-contain" priority />
+        <span className="shrink-0 whitespace-nowrap border-l border-[var(--stroke)] pl-2 text-[9px] font-medium tracking-wide text-[var(--muted)]">WORKSPACE</span>
+      </Link>
+      <div className="flex-1 overflow-y-auto px-3 py-5"><NavigationGroups items={navItems} /></div>
+      <div className="border-t p-3"><WorkspaceSwitcher current={currentWorkspace} /></div>
+    </aside>
 
-  return (
-    <div className="workspace-theme flex min-h-screen flex-col overflow-hidden lg:flex-row">
-      <PresenceHeartbeat />
-      <aside className="workspace-sidebar relative flex w-full shrink-0 flex-col overflow-hidden border-b lg:w-[250px] lg:border-b-0 lg:border-r">
-        <div className="pointer-events-none absolute inset-0 surface-grid opacity-[0.12]" />
-
-        <div className="relative flex min-h-20 items-center border-b border-white/[0.08] px-3">
-          <Link href="/" className="block rounded bg-white">
-            <Image src="/ilamed-logo.png" alt="ILAMED — Institute of Laser & Aesthetic Medicine" width={2327} height={768} className="h-auto w-[214px] object-contain" priority />
+    <div className="min-w-0 flex-1">
+      <header className="workspace-topbar sticky top-0 z-40 flex min-h-[68px] items-center gap-3 border-b px-4 sm:px-6">
+        <details className="workspace-mobile-nav relative lg:hidden">
+          <summary aria-label="Open navigation" className="workspace-control flex h-10 w-10 items-center justify-center rounded-xl">
+            <Menu aria-hidden="true" size={19} strokeWidth={1.8} />
+          </summary>
+          <div className="workspace-mobile-panel absolute left-0 top-12 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border p-3 shadow-xl">
+            <Link href="/" className="mb-3 flex items-center gap-2 border-b border-[var(--stroke)] px-2 pb-3"><Image src="/company-logo.png" alt="ILAMED International institutional logo" width={2164} height={746} className="h-auto w-28" /><span className="text-[10px] text-[var(--muted)]">Workspace</span></Link>
+            <NavigationGroups items={navItems} />
+            <div className="mt-4 grid gap-3 border-t border-[var(--stroke)] pt-3"><WorkspaceSwitcher current={currentWorkspace} />{userAction}</div>
+          </div>
+        </details>
+        <div className="min-w-0 flex-1 md:flex-none"><p className="hidden text-[11px] text-[var(--muted)] sm:block">Workspace / {title}</p><h1 className="truncate text-base font-semibold tracking-[-0.02em] text-[var(--foreground)] sm:mt-0.5 sm:text-lg">{title}</h1></div>
+        <div className="ml-auto flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+          <GlobalSearch />
+          <NotificationsInbox />
+          <ThemeToggle />
+          {topbarRight}
+          <Link href="/profile" aria-label={`Profile for ${userName}`} title={userEmail} className="workspace-user-chip flex h-10 items-center gap-2 rounded-xl px-1.5 sm:px-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-xs font-semibold text-indigo-700">{initials}</span>
+            <span className="hidden min-w-0 text-left sm:block"><span className="block max-w-32 truncate text-xs font-semibold text-[var(--foreground)]">{userName}</span><span className="block text-[10px] text-[var(--muted)]">My profile</span></span>
           </Link>
+          {userAction ? <div className="hidden sm:block">{userAction}</div> : null}
         </div>
-
-        <div className="relative px-3 pt-4">
-          <WorkspaceSwitcher current={currentWorkspace} />
-        </div>
-
-        <div className="relative px-4 pt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/26">
-            Workspace
-          </p>
-        </div>
-
-        <nav className="relative flex gap-2 overflow-x-auto px-3 py-3 lg:flex-1 lg:flex-col lg:overflow-y-auto">
-          {navItems.map((item) => (
-            <Link
-              key={`${item.label}-${item.href}`}
-              href={item.href}
-              className={`workspace-nav-item group ${
-                item.active ? "workspace-nav-active" : ""
-              }`}
-            >
-              <span
-                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl ${
-                  item.active
-                    ? "bg-indigo-100 text-indigo-700"
-                    : "bg-slate-100 text-slate-500 group-hover:bg-indigo-50"
-                }`}
-              >
-                <ShellIcon icon={item.icon} />
-              </span>
-              <span className="flex-1 font-medium">{item.label}</span>
-              {item.badge ? (
-                <span
-                  className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-                    item.active
-                      ? "bg-black/20 text-[var(--accent)]"
-                      : "border border-white/10 bg-white/5 text-white/45"
-                  }`}
-                >
-                  {item.badge}
-                </span>
-              ) : null}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="relative mx-3 mb-3 mt-auto rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-4">
-          <div className="pointer-events-none absolute inset-0 surface-grid opacity-[0.08]" />
-          <div className="relative">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/28">
-                Signed in
-              </p>
-              <div className="flex items-center gap-2">{userAction}</div>
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(62,214,177,0.18),rgba(127,211,247,0.22))] text-xs font-semibold text-[var(--accent)]">
-                {initials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white/84">{userName}</p>
-                <p className="truncate text-xs text-white/36">{userEmail}</p>
-              </div>
-            </div>
-            <p className="mt-4 text-xs leading-6 text-white/34">
-              Boards, deadlines, and activity all stay in sync from here.
-            </p>
-          </div>
-        </div>
-      </aside>
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="workspace-topbar relative z-30 flex min-h-16 shrink-0 flex-col gap-3 border-b px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/28">
-              Workspace view
-            </p>
-            <h1 className="display-font text-3xl text-white/92">{title}</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <NotificationsInbox />
-            {topbarRight}
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
-          {children}
-        </main>
-      </div>
+      </header>
+      <main className="workspace-content min-h-[calc(100vh-68px)] px-4 py-5 sm:px-6 sm:py-7 xl:px-8"><div className="mx-auto w-full max-w-[1480px]">{children}</div></main>
     </div>
-  );
+  </div>;
 }

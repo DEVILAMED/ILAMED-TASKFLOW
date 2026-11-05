@@ -2,8 +2,9 @@
 
 import { Fragment, useMemo, useState } from "react";
 
-type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
+type TaskView = "list" | "board" | "calendar";
 type Employee = { id: string; name: string | null; email: string };
 type ChecklistItem = { id: string; title: string; isCompleted: boolean; position: number };
 type TaskComment = { id: string; content: string; createdAt: string; author: string; authorId: string };
@@ -22,13 +23,19 @@ type CompanyTask = {
 
 const statusLabels: Record<TaskStatus, string> = {
   TODO: "Not started",
+  ACCEPTED: "Accepted",
   IN_PROGRESS: "In progress",
+  ON_HOLD: "On hold",
+  SUBMITTED_FOR_REVIEW: "Awaiting review",
+  REVISION_REQUESTED: "Revision requested",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
   DONE: "Completed",
 };
 const statusProgress: Record<TaskStatus, number> = {
-  TODO: 0,
-  IN_PROGRESS: 50,
-  DONE: 100,
+  TODO: 0, ACCEPTED: 10, IN_PROGRESS: 50, ON_HOLD: 50, SUBMITTED_FOR_REVIEW: 90,
+  REVISION_REQUESTED: 60, APPROVED: 100, REJECTED: 100, CANCELLED: 0, DONE: 100,
 };
 const priorityLabels: Record<TaskPriority, string> = {
   LOW: "Low",
@@ -79,6 +86,7 @@ export default function CompanyTaskBoard({
   const [employeeFilter, setEmployeeFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [dueFilter, setDueFilter] = useState("ALL");
+  const [view, setView] = useState<TaskView>("list");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [checklistText, setChecklistText] = useState("");
@@ -96,9 +104,9 @@ export default function CompanyTaskBoard({
   const [notice, setNotice] = useState<string | null>(null);
 
   const counts = useMemo(() => ({
-    open: tasks.filter((task) => task.status === "TODO").length,
+    open: tasks.filter((task) => task.status === "TODO" || task.status === "ACCEPTED").length,
     inProgress: tasks.filter((task) => task.status === "IN_PROGRESS").length,
-    completed: tasks.filter((task) => task.status === "DONE").length,
+    completed: tasks.filter((task) => task.status === "DONE" || task.status === "APPROVED").length,
   }), [tasks]);
 
   const currentDate = new Date();
@@ -108,7 +116,7 @@ export default function CompanyTaskBoard({
     const matchesSearch = !query
       || task.title.toLocaleLowerCase().includes(query)
       || task.description?.toLocaleLowerCase().includes(query);
-    const overdue = task.status !== "DONE" && task.dueDate !== null && task.dueDate.slice(0, 10) < today;
+    const overdue = task.status !== "DONE" && task.status !== "APPROVED" && task.status !== "CANCELLED" && task.dueDate !== null && task.dueDate.slice(0, 10) < today;
     return matchesSearch
       && (statusFilter === "ALL" || task.status === statusFilter)
       && (employeeFilter === "ALL" || task.assignee?.id === employeeFilter)
@@ -417,9 +425,14 @@ export default function CompanyTaskBoard({
 
       <section className="panel-card overflow-hidden rounded-3xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
-          <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
             <h2 className="font-semibold text-white/90">{isAdmin ? "Company tasks" : "Assigned to me"}</h2>
             <p className="mt-1 text-xs text-white/40">{visibleTasks.length} {visibleTasks.length === 1 ? "task" : "tasks"}</p>
+            </div>
+            <div role="group" aria-label="Task view" className="flex rounded-lg border border-[var(--stroke)] bg-[var(--panel-soft)] p-1">
+              {([["list", "List"], ["board", "Board"], ["calendar", "Calendar"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setView(value)} aria-pressed={view === value} className={`rounded-md px-3 py-1.5 text-xs font-medium ${view === value ? "bg-[var(--panel)] text-[var(--accent-strong)] shadow-sm" : "text-[var(--muted)]"}`}>{label}</button>)}
+            </div>
           </div>
           <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <input
@@ -438,9 +451,7 @@ export default function CompanyTaskBoard({
             ) : null}
             <select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs">
               <option value="ALL">All statuses</option>
-              <option value="TODO">Not started</option>
-              <option value="IN_PROGRESS">In progress</option>
-              <option value="DONE">Completed</option>
+              {(Object.keys(statusLabels) as TaskStatus[]).map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
             </select>
             <select aria-label="Filter by priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs">
               <option value="ALL">All priorities</option>
@@ -459,7 +470,11 @@ export default function CompanyTaskBoard({
         {error ? <p role="alert" className="mx-5 mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p> : null}
         {notice ? <p role="status" className="mx-5 mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</p> : null}
 
-        {visibleTasks.length ? (
+        {visibleTasks.length ? view === "board" ? (
+          <KanbanBoard tasks={visibleTasks} isAdmin={isAdmin} pendingId={pendingId} onUpdate={updateStatus} />
+        ) : view === "calendar" ? (
+          <TaskCalendar tasks={visibleTasks} />
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left">
               <thead className="text-[11px] uppercase tracking-wider text-white/35">
@@ -529,7 +544,7 @@ export default function CompanyTaskBoard({
                         </td>
                       ) : null}
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-white/55">
-                        {task.dueDate && task.status !== "DONE" && task.dueDate.slice(0, 10) < today ? (
+                        {task.dueDate && task.status !== "DONE" && task.status !== "APPROVED" && task.status !== "CANCELLED" && task.dueDate.slice(0, 10) < today ? (
                           <span className="inline-flex items-center gap-2">
                             {formatDueDate(task.dueDate)}
                             <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-2 py-1 text-[10px] font-semibold text-rose-300">Overdue</span>
@@ -563,7 +578,7 @@ export default function CompanyTaskBoard({
                           disabled={pendingId === task.id}
                           className="soft-input h-9 rounded-lg px-2 text-xs disabled:opacity-50"
                         >
-                          {(Object.keys(statusLabels) as TaskStatus[]).map((status) => (
+                          {(isAdmin ? [task.status, "CANCELLED" as TaskStatus] : availableEmployeeStatuses(task.status)).map((status) => (
                             <option key={status} value={status}>{statusLabels[status]}</option>
                           ))}
                         </select>
@@ -648,4 +663,64 @@ export default function CompanyTaskBoard({
       </section>
     </div>
   );
+}
+
+function availableEmployeeStatuses(status: TaskStatus): TaskStatus[] {
+  const transitions: Partial<Record<TaskStatus, TaskStatus[]>> = {
+    TODO: ["ACCEPTED", "IN_PROGRESS"],
+    ACCEPTED: ["IN_PROGRESS", "ON_HOLD"],
+    IN_PROGRESS: ["ON_HOLD", "SUBMITTED_FOR_REVIEW"],
+    ON_HOLD: ["IN_PROGRESS"],
+    REVISION_REQUESTED: ["IN_PROGRESS", "SUBMITTED_FOR_REVIEW"],
+  };
+  return [status, ...(transitions[status] ?? [])];
+}
+
+function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate }: {
+  tasks: CompanyTask[]; isAdmin: boolean; pendingId: string | null; onUpdate: (task: CompanyTask, status: TaskStatus) => void;
+}) {
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const columns: { title: string; status: TaskStatus; matches: TaskStatus[] }[] = [
+    { title: "To do", status: "TODO", matches: ["TODO", "ACCEPTED"] },
+    { title: "In progress", status: "IN_PROGRESS", matches: ["IN_PROGRESS"] },
+    { title: "On hold", status: "ON_HOLD", matches: ["ON_HOLD", "REVISION_REQUESTED"] },
+    { title: "In review", status: "SUBMITTED_FOR_REVIEW", matches: ["SUBMITTED_FOR_REVIEW"] },
+    { title: "Completed", status: "APPROVED", matches: ["APPROVED", "DONE", "REJECTED", "CANCELLED"] },
+  ];
+  return <div className="grid gap-3 overflow-x-auto p-4 md:grid-cols-2 xl:grid-cols-5">
+    {columns.map((column) => <section key={column.status} onDragOver={(event) => { if (!isAdmin) event.preventDefault(); }} onDrop={(event) => {
+      event.preventDefault();
+      if (isAdmin || !draggedId) return;
+      const task = tasks.find((item) => item.id === draggedId);
+      if (task && availableEmployeeStatuses(task.status).includes(column.status)) onUpdate(task, column.status);
+      setDraggedId(null);
+    }} className="min-h-52 rounded-xl border border-[var(--stroke)] bg-[var(--panel-soft)] p-2.5">
+      <div className="mb-2 flex items-center justify-between px-1"><h3 className="text-xs font-semibold text-[var(--foreground)]">{column.title}</h3><span className="rounded-md bg-[var(--panel)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">{tasks.filter((task) => column.matches.includes(task.status)).length}</span></div>
+      <div className="grid content-start gap-2">{tasks.filter((task) => column.matches.includes(task.status)).map((task) => <article key={task.id} draggable={!isAdmin && pendingId !== task.id} onDragStart={(event) => { setDraggedId(task.id); event.dataTransfer.setData("text/plain", task.id); }} onDragEnd={() => setDraggedId(null)} className={`rounded-lg border border-[var(--stroke)] bg-[var(--panel)] p-3 shadow-sm ${!isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}>
+        <p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p>{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatDueDate(task.dueDate)}</time> : null}</div>
+        {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-semibold text-indigo-700">{(task.assignee.name || task.assignee.email).slice(0, 1).toUpperCase()}</span><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}
+      </article>)}</div>
+    </section>)}
+  </div>;
+}
+
+function TaskCalendar({ tasks }: { tasks: CompanyTask[] }) {
+  const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells = Array.from({ length: Math.ceil((firstDay + daysInMonth) / 7) * 7 }, (_, index) => {
+    const day = index - firstDay + 1;
+    return day > 0 && day <= daysInMonth ? day : null;
+  });
+  function key(day: number) { return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`; }
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return <div className="p-4">
+    <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-semibold text-[var(--foreground)]">{month.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h3><div className="flex gap-2"><button type="button" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="secondary-button h-8 w-8">‹</button><button type="button" onClick={() => { const now = new Date(); setMonth(new Date(now.getFullYear(), now.getMonth(), 1)); }} className="secondary-button h-8 px-3 text-xs">Today</button><button type="button" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="secondary-button h-8 w-8">›</button></div></div>
+    <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-[var(--stroke)]">{weekDays.map((day) => <div key={day} className="border-b border-[var(--stroke)] bg-[var(--panel-soft)] px-2 py-2 text-center text-[10px] font-semibold text-[var(--muted)]">{day}</div>)}{cells.map((day, index) => {
+      const dateTasks = day ? tasks.filter((task) => task.dueDate?.slice(0, 10) === key(day)) : [];
+      return <div key={index} className={`min-h-24 border-b border-r border-[var(--stroke)] p-1.5 ${day ? "bg-[var(--panel)]" : "bg-[var(--panel-soft)]"}`}><span className="text-[10px] text-[var(--muted)]">{day ?? ""}</span><div className="mt-1 grid gap-1">{dateTasks.slice(0, 3).map((task) => <p key={task.id} title={task.title} className="truncate rounded bg-indigo-50 px-1.5 py-1 text-[9px] font-medium text-indigo-700">{task.title}</p>)}{dateTasks.length > 3 ? <p className="px-1 text-[9px] text-[var(--muted)]">+{dateTasks.length - 3} more</p> : null}</div></div>;
+    })}</div>
+    {!tasks.some((task) => task.dueDate) ? <p className="mt-4 text-center text-xs text-[var(--muted)]">No tasks have due dates in this view.</p> : null}
+  </div>;
 }

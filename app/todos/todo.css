@@ -1,15 +1,14 @@
 .todo-app {
-  --todo-ink: #1e293b;
-  --todo-muted: #64748b;
-  --todo-accent: #4f46e5;
-  background:
-    radial-gradient(ellipse at 92% 4%, rgba(224, 231, 255, 0.62), transparent 34rem),
-    #f6f7fb;
+  --todo-ink: var(--foreground);
+  --todo-muted: var(--muted);
+  --todo-accent: var(--accent);
+  color: var(--foreground);
+  background: var(--background);
 }
 
 .todo-sidebar {
-  background: rgba(248, 249, 252, 0.94);
-  border-right: 1px solid #e8ebf2;
+  background: var(--sidebar);
+  border-right: 1px solid var(--stroke);
 }
 
 .todo-nav-item {
@@ -44,11 +43,11 @@
 
 .todo-input {
   height: 2.6rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke);
   border-radius: 0.7rem;
-  background: white;
+  background: var(--panel);
   padding: 0 0.75rem;
-  color: #1e293b;
+  color: var(--foreground);
   font-size: 0.875rem;
   outline: none;
 }
@@ -84,10 +83,23 @@
 
 .todo-secondary-button,
 .todo-icon-button {
-  border: 1px solid #e2e8f0;
-  background: white;
-  color: #475569;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  color: var(--foreground);
 }
+
+html[data-theme="dark"] .todo-app .text-slate-900,
+html[data-theme="dark"] .todo-app .text-slate-800,
+html[data-theme="dark"] .todo-app .text-slate-700,
+html[data-theme="dark"] .todo-app .text-slate-600,
+html[data-theme="dark"] .todo-app .text-slate-500 { color: var(--foreground); }
+html[data-theme="dark"] .todo-app .text-slate-400 { color: var(--muted); }
+html[data-theme="dark"] .todo-app .bg-white,
+html[data-theme="dark"] .todo-app [class*="bg-white/"] { background: var(--panel); }
+html[data-theme="dark"] .todo-app [class*="border-slate-"] { border-color: var(--stroke); }
+html[data-theme="dark"] .todo-app .todo-nav-active { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); border-color: var(--stroke); color: var(--accent); }
+html[data-theme="dark"] .todo-app .todo-secondary-button,
+html[data-theme="dark"] .todo-app .todo-icon-button { background: var(--panel); border-color: var(--stroke); color: var(--foreground); }
 
 .todo-secondary-button:hover,
 .todo-icon-button:hover {

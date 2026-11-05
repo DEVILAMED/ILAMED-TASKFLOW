@@ -26,10 +26,14 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
+  const managerTeams = user.role === UserRole.MANAGER
+    ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })
+    : [];
+  const teamMemberIds = managerTeams.length ? (await prisma.teamMembership.findMany({ where: { teamId: { in: managerTeams.map((team) => team.teamId) } }, select: { userId: true } })).map((membership) => membership.userId) : [];
   const tasks = await prisma.task.findMany({
     where: {
       projectId: COMPANY_TASK_PROJECT_ID,
-      ...(user.role === UserRole.ADMIN ? {} : { assigneeId: user.id }),
+      ...(user.role === UserRole.ADMIN ? {} : { assigneeId: { in: [...new Set([user.id, ...teamMemberIds])] } }),
     },
     select: taskSelect,
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -43,8 +47,8 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
-  if (user.role !== UserRole.ADMIN) {
-    return NextResponse.json({ ok: false, error: "Administrator access is required to assign tasks." }, { status: 403 });
+  if (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER) {
+    return NextResponse.json({ ok: false, error: "Manager access is required to assign tasks." }, { status: 403 });
   }
 
   let payload: {
@@ -97,12 +101,18 @@ export async function POST(request: Request) {
     }
   }
 
+  const managerTeams = user.role === UserRole.MANAGER
+    ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })
+    : [];
   const assignee = await prisma.user.findFirst({
     where: { id: assigneeId, role: { not: UserRole.ADMIN } },
     select: { id: true },
   });
   if (!assignee) {
     return NextResponse.json({ ok: false, error: "Choose an active employee account." }, { status: 400 });
+  }
+  if (user.role === UserRole.MANAGER && !await prisma.teamMembership.findFirst({ where: { userId: assignee.id, teamId: { in: managerTeams.map((team) => team.teamId) } }, select: { id: true } })) {
+    return NextResponse.json({ ok: false, error: "You can only assign tasks to members of your teams." }, { status: 403 });
   }
 
   const project = await ensureCompanyTaskProject(user.id);
@@ -125,6 +135,9 @@ export async function POST(request: Request) {
         },
       },
       select: taskSelect,
+    });
+    await tx.taskStatusHistory.create({
+      data: { taskId: createdTask.id, actorId: user.id, fromStatus: null, toStatus: TaskStatus.TODO },
     });
     await tx.notification.create({
       data: {

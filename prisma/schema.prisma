@@ -22,6 +22,12 @@ model User {
   projects          Project[]
   sessions          Session[]
   tasks             Task[]               @relation("AssignedTasks")
+  statusChanges     TaskStatusHistory[]  @relation("TaskStatusActor")
+  submissions       TaskSubmission[]     @relation("TaskSubmitter")
+  reviews           TaskReview[]         @relation("TaskReviewer")
+  employeeProfile   EmployeeProfile?
+  managedEmployees  EmployeeProfile[]    @relation("ReportingManager")
+  headedDepartments Department[]         @relation("DepartmentHead")
   todoLists         TodoList[]           @relation("TodoListOwner")
   todoMemberships   TodoListMembership[]
   createdTodoTasks  TodoTask[]           @relation("TodoTaskCreator")
@@ -40,6 +46,39 @@ model Session {
   createdAt DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Department {
+  id          String            @id @default(uuid())
+  name        String            @unique
+  description String?
+  headId      String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  head        User?             @relation("DepartmentHead", fields: [headId], references: [id], onDelete: SetNull)
+  employees   EmployeeProfile[]
+
+  @@index([headId])
+}
+
+model EmployeeProfile {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  employeeCode     String?          @unique
+  phone            String?
+  designation      String?
+  joiningDate      DateTime?        @db.Date
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  departmentId     String?
+  managerId        String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department       Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  manager          User?            @relation("ReportingManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  @@index([departmentId, employmentStatus])
+  @@index([managerId])
 }
 
 model Project {
@@ -61,27 +100,29 @@ model Project {
 }
 
 model Task {
-  id            String         @id @default(uuid())
-  title         String
-  description   String?
-  issueType     IssueType      @default(TASK)
-  status        TaskStatus     @default(TODO)
-  priority      Priority       @default(MEDIUM)
-  storyPoints   Int?
-  dueDate       DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  projectId     String
-  assigneeId    String?
-  sprintId      String?
-  comments      Comment[]
-  assignee      User?          @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  project       Project        @relation(fields: [projectId], references: [id])
-  sprint        Sprint?        @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  id             String                     @id @default(uuid())
+  title          String
+  description    String?
+  issueType      IssueType                  @default(TASK)
+  status         TaskStatus                 @default(TODO)
+  priority       Priority                   @default(MEDIUM)
+  storyPoints    Int?
+  dueDate        DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  projectId      String
+  assigneeId     String?
+  sprintId       String?
+  comments       Comment[]
+  assignee       User?                      @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  project        Project                    @relation(fields: [projectId], references: [id])
+  sprint         Sprint?                    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   checklistItems CompanyTaskChecklistItem[]
-  labels        TaskLabel[]
-  activities    Activity[]
-  notifications Notification[]
+  labels         TaskLabel[]
+  activities     Activity[]
+  notifications  Notification[]
+  statusHistory  TaskStatusHistory[]
+  submissions    TaskSubmission[]
 }
 
 model CompanyTaskChecklistItem {
@@ -94,6 +135,49 @@ model CompanyTaskChecklistItem {
   task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId, position])
+}
+
+model TaskStatusHistory {
+  id         String      @id @default(uuid())
+  taskId     String
+  actorId    String
+  fromStatus TaskStatus?
+  toStatus   TaskStatus
+  createdAt  DateTime    @default(now())
+  task       Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor      User        @relation("TaskStatusActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model TaskSubmission {
+  id            String       @id @default(uuid())
+  taskId        String
+  submittedById String
+  notes         String?
+  createdAt     DateTime     @default(now())
+  task          Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  submittedBy   User         @relation("TaskSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  reviews       TaskReview[]
+
+  @@index([taskId, createdAt])
+  @@index([submittedById, createdAt])
+}
+
+model TaskReview {
+  id           String         @id @default(uuid())
+  submissionId String
+  reviewerId   String
+  decision     ReviewDecision
+  rating       Int?
+  feedback     String
+  createdAt    DateTime       @default(now())
+  submission   TaskSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer     User           @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([submissionId, createdAt])
+  @@index([reviewerId, createdAt])
 }
 
 model Sprint {
@@ -305,8 +389,27 @@ model TodoTaskStep {
 
 enum TaskStatus {
   TODO
+  ACCEPTED
   IN_PROGRESS
+  ON_HOLD
+  SUBMITTED_FOR_REVIEW
+  REVISION_REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
   DONE
+}
+
+enum ReviewDecision {
+  APPROVED
+  REVISION_REQUESTED
+  REJECTED
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
 }
 
 enum Priority {
@@ -359,4 +462,8 @@ enum NotificationType {
   TASK_COMMENTED
   MENTIONED
   DUE_DATE_CHANGED
+  TASK_SUBMITTED
+  TASK_APPROVED
+  TASK_REVISION_REQUESTED
+  TASK_REJECTED
 }

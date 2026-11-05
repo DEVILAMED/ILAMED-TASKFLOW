@@ -14,7 +14,7 @@ export default function LogoutButton() {
 
     if (response.ok) {
       startTransition(() => {
-        router.push("/login");
+        router.push("/");
         router.refresh();
       });
       return;
