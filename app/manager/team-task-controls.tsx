@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type TeamTask = {
   id: string;
   title: string;
+  description: string | null;
   status: string;
   assignee: { name: string | null; email: string } | null;
   comments: { id: string; content: string }[];
@@ -16,6 +17,14 @@ export default function TeamTaskControls({ tasks }: { tasks: TeamTask[] }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    function refresh() { if (!pending && document.visibilityState === "visible") router.refresh(); }
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 60000);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); window.clearInterval(timer); };
+  }, [router, pending]);
 
   async function changeStatus(task: TeamTask) {
     setPending(true);
@@ -44,11 +53,12 @@ export default function TeamTaskControls({ tasks }: { tasks: TeamTask[] }) {
     {error ? <p role="alert" className="mt-3 text-sm text-rose-500">{error}</p> : null}
     {notice ? <p role="status" className="mt-3 text-sm text-[var(--accent)]">{notice}</p> : null}
     {!tasks.length ? <p className="mt-3 text-sm text-[var(--muted)]">No team tasks require hold or resume controls.</p> : null}
-    <div className="mt-3 divide-y divide-[var(--stroke)]">{tasks.map((task) => <article key={task.id} className="py-3">
+    <div className="mt-3 divide-y divide-[var(--stroke)]">{tasks.map((task) => <article id={`task-${task.id}`} key={task.id} className="scroll-mt-24 py-3 target:rounded-xl target:bg-[var(--panel-soft)] target:p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h3 className="text-sm font-medium">{task.title}</h3><p className="mt-1 text-xs text-[var(--muted)]">{task.assignee?.name || task.assignee?.email} / {task.status.replaceAll("_", " ").toLowerCase()}</p></div>
-        <button type="button" disabled={pending} onClick={() => void changeStatus(task)} className={`${task.status === "ON_HOLD" ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{task.status === "ON_HOLD" ? "Resume task" : "Put on hold"}</button>
+        {["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED", "ON_HOLD"].includes(task.status) ? <button type="button" disabled={pending} onClick={() => void changeStatus(task)} className={`${task.status === "ON_HOLD" ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{task.status === "ON_HOLD" ? "Resume task" : "Put on hold"}</button> : null}
       </div>
+      {task.description ? <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">{task.description}</p> : null}
       {task.comments.map((comment) => <p key={comment.id} className="mt-2 whitespace-pre-wrap rounded-lg bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted)]">{comment.content}</p>)}
     </article>)}</div>
   </section>;

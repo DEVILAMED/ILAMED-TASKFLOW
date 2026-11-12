@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type ReviewTask = {
@@ -9,6 +10,7 @@ type ReviewTask = {
 };
 
 export default function ReviewQueue() {
+  const selectedTask = useSearchParams().get("task");
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<ReviewTask[]>([]);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
@@ -25,6 +27,17 @@ export default function ReviewQueue() {
   }
 
   useEffect(() => { void refresh().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Unable to load reviews.")).finally(() => setLoading(false)); }, []);
+
+  useEffect(() => {
+    async function reload() {
+      if (document.visibilityState !== "visible" || pending) return;
+      try { await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to refresh reviews."); }
+    }
+    window.addEventListener("focus", reload);
+    document.addEventListener("visibilitychange", reload);
+    const timer = window.setInterval(reload, 60000);
+    return () => { window.removeEventListener("focus", reload); document.removeEventListener("visibilitychange", reload); window.clearInterval(timer); };
+  }, [pending]);
 
   async function review(task: ReviewTask, decision: "APPROVED" | "REVISION_REQUESTED" | "REJECTED") {
     setPending(task.id); setError(null); setNotice(null);
@@ -44,9 +57,10 @@ export default function ReviewQueue() {
   return <div className="flex flex-col gap-4">
     {error ? <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
     {notice ? <p role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
+    {selectedTask ? <div className="text-sm text-[var(--muted)]">{!loading && !tasks.some((task) => task.id === selectedTask) ? "This submission is no longer awaiting review or is unavailable." : "Showing the selected submission."} <button type="button" className="text-[var(--accent)] underline" onClick={() => { const url = new URL(window.location.href); url.searchParams.delete("task"); window.history.replaceState(null, "", url); }}>Show all submissions</button></div> : null}
     {loading ? <p role="status" className="p-6 text-sm text-[var(--muted)]">Loading submissions...</p> : null}
     {!loading && !tasks.length && !error ? <p className="rounded-2xl border border-white/[0.07] p-6 text-sm text-white/50">No submissions are waiting for review.</p> : null}
-    {tasks.map((task) => <article key={task.id} className="panel-card rounded-2xl p-5">
+    {tasks.filter((task) => !selectedTask || task.id === selectedTask).map((task) => <article key={task.id} className="panel-card rounded-2xl p-5">
       <div className="flex flex-wrap justify-between gap-3">
         <div><h2 className="font-semibold text-white/90">{task.title}</h2><p className="mt-1 text-xs text-white/45">Submitted by {task.submission?.submitter ?? "employee"} · {task.assignee?.name || task.assignee?.email}</p></div>
         <span className="text-xs text-white/40">{task.submission ? new Date(task.submission.createdAt).toLocaleString() : ""}</span>

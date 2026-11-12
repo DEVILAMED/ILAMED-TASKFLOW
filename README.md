@@ -59,3 +59,17 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Workspace navigation and task workflow
+
+The admin task workspace is at `/admin`. Assignment opens from **Assign task**, employee account management is at `/admin/employees`, and existing company analytics are at `/admin/overview`. Reports remain at `/reports`.
+
+Task views keep filters, sort order, calendar month, and the selected task in the URL. Search and company notifications link to the appropriate task or review. Tasks and reviews refresh when returning to the workspace and periodically while visible; drafts remain in component state during those refreshes. Calendar tasks can also be opened from the monthly agenda, including on mobile.
+
+Employees report blockers without changing task status or deadlines. Administrators and the responsible team manager authorize holds and resume held work; those changes notify the employee and record task history. Checklist completion is displayed separately from approval status.
+
+Run the workflow and task-link regression checks with Node.js 24:
+
+```bash
+node --test lib/company-task-workflow.test.mjs lib/company-task-links.test.mjs
+```

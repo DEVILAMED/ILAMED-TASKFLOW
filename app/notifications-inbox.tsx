@@ -85,9 +85,7 @@ export default function NotificationsInbox() {
   }
 
   async function openNotification(notification: InboxNotification) {
-    if (!notification.readAt && !(await markRead(notification.id))) {
-      return;
-    }
+    if (!notification.readAt) void markRead(notification.id);
     setOpen(false);
     router.push(notification.href);
   }

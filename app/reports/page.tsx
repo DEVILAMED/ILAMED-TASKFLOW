@@ -136,8 +136,9 @@ export default async function ReportsPage() {
           icon: "board",
         },
         { href: "/reports", label: "Reports", icon: "reports", active: true },
+        ...(user.role === "ADMIN" ? [{ href: "/admin/overview", label: "Company overview", icon: "dashboard" as const }] : []),
         ...(user.role === "ADMIN"
-          ? [{ href: "/admin#employees", label: "Employees", icon: "team" as const }]
+          ? [{ href: "/admin/employees", label: "Employees", icon: "team" as const }]
           : []),
       ]}
       userName={user.name || user.email}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { companyTaskHref } from "@/lib/company-task-links";
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
         return [...new Set([profile?.departmentId, ...managed.map((department) => department.id)].filter((id): id is string => Boolean(id)))];
       });
   const [tasks, projects, users, departments] = await Promise.all([
-    prisma.task.findMany({ where: { AND: [taskScope, { title: { contains: query, mode: "insensitive" } }] }, take: 6, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, status: true, projectId: true, project: { select: { title: true } } } }),
+    prisma.task.findMany({ where: { AND: [taskScope, { title: { contains: query, mode: "insensitive" } }] }, take: 6, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, status: true, assigneeId: true, projectId: true, project: { select: { title: true } } } }),
     prisma.project.findMany({ where: { AND: [{ id: { not: COMPANY_TASK_PROJECT_ID } }, user.role === UserRole.ADMIN ? {} : accessibleProjectWhere(user.id), { title: { contains: query, mode: "insensitive" } }] }, take: 4, orderBy: { title: "asc" }, select: { id: true, title: true } }),
     user.role === UserRole.ADMIN
       ? prisma.user.findMany({ where: { role: { not: UserRole.ADMIN }, OR: [{ name: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }, { employeeProfile: { is: { employeeCode: { contains: query, mode: "insensitive" } } } }] }, take: 5, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } })
@@ -44,9 +45,9 @@ export async function GET(request: Request) {
   ]);
 
   const results = [
-    ...tasks.map((task) => ({ id: `task-${task.id}`, title: task.title, detail: task.project.title, kind: "Task", href: task.projectId === COMPANY_TASK_PROJECT_ID ? (user.role === UserRole.ADMIN ? "/admin" : "/company-tasks") : `/projects/${task.projectId}` })),
+    ...tasks.map((task) => ({ id: `task-${task.id}`, title: task.title, detail: task.project.title, kind: "Task", href: task.projectId === COMPANY_TASK_PROJECT_ID ? companyTaskHref(user.role, user.id, task.id, task.assigneeId, task.status === "SUBMITTED_FOR_REVIEW" && task.assigneeId !== user.id) : `/projects/${task.projectId}` })),
     ...projects.map((project) => ({ id: `project-${project.id}`, title: project.title, detail: "Project", kind: "Project", href: `/projects/${project.id}` })),
-    ...users.map((person) => ({ id: `employee-${person.id}`, title: person.name || person.email, detail: person.email, kind: "Employee", href: user.role === UserRole.ADMIN ? "/admin#employees" : "/company-tasks" })),
+    ...users.map((person) => ({ id: `employee-${person.id}`, title: person.name || person.email, detail: person.email, kind: "Employee", href: user.role === UserRole.ADMIN ? "/admin/employees" : "/company-tasks" })),
     ...departments.map((department) => ({ id: `department-${department.id}`, title: department.name, detail: department.description || "Department", kind: "Department", href: "/departments" })),
     ...(/report|analytics|performance/i.test(query) ? [{ id: "report-center", title: "Task and performance reports", detail: "Analytics", kind: "Report", href: "/reports" }] : []),
   ].slice(0, 12);

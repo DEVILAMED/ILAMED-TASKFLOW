@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { companyTaskHref } from "@/lib/company-task-links";
 import { NotificationType } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -37,6 +38,9 @@ export async function GET() {
         type: true,
         message: true,
         href: true,
+        projectId: true,
+        taskId: true,
+        task: { select: { assigneeId: true } },
         readAt: true,
         createdAt: true,
       },
@@ -48,6 +52,7 @@ export async function GET() {
     unreadCount,
     notifications: notifications.map((notification) => ({
       ...notification,
+      href: notification.projectId === COMPANY_TASK_PROJECT_ID && notification.taskId ? companyTaskHref(user.role, user.id, notification.taskId, notification.task?.assigneeId ?? null, notification.type === "TASK_SUBMITTED") : notification.href,
       readAt: notification.readAt?.toISOString() ?? null,
       createdAt: notification.createdAt.toISOString(),
     })),
