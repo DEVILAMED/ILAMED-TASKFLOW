@@ -12,24 +12,28 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  let payload: { status?: unknown; priority?: unknown; assigneeId?: unknown } | null;
+  let payload: { status?: unknown; priority?: unknown; assigneeId?: unknown; notes?: unknown } | null;
   try {
     payload = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
   }
 
+  const notes = typeof payload?.notes === "string" ? payload.notes.trim() : "";
+  if ((payload?.notes !== undefined && typeof payload.notes !== "string") || notes.length > 2000) {
+    return NextResponse.json({ ok: false, error: "Notes must be at most 2000 characters." }, { status: 400 });
+  }
   const submittedKeys = Object.keys(payload ?? {});
   const status = payload?.status;
   const priority = payload?.priority;
   const assigneeId = payload?.assigneeId;
   const allowedKeys = user.role === UserRole.ADMIN
     ? new Set(["status", "priority", "assigneeId"])
-    : new Set(["status"]);
+    : new Set(["status", "notes"]);
   if (submittedKeys.some((key) => !allowedKeys.has(key))) {
     return NextResponse.json({ ok: false, error: "Unsupported task update." }, { status: 400 });
   }
-  if (user.role !== UserRole.ADMIN && (submittedKeys.length !== 1 || submittedKeys[0] !== "status")) {
+  if (user.role !== UserRole.ADMIN && (status === undefined || submittedKeys.some((key) => key !== "status" && key !== "notes"))) {
     return NextResponse.json({ ok: false, error: "Only administrators can change assignment or priority." }, { status: 403 });
   }
   const employeeStatuses: TaskStatus[] = [TaskStatus.ACCEPTED, TaskStatus.IN_PROGRESS, TaskStatus.ON_HOLD, TaskStatus.SUBMITTED_FOR_REVIEW, TaskStatus.REVISION_REQUESTED];
@@ -119,13 +123,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       },
     });
 
+    if (status === TaskStatus.ON_HOLD && notes) {
+      await tx.comment.create({ data: { taskId: existing.id, userId: user.id, content: `Blocker: ${notes}` } });
+    }
     if (status !== undefined) {
       await tx.taskStatusHistory.create({
         data: { taskId: existing.id, actorId: user.id, fromStatus: existing.status, toStatus: status as TaskStatus },
       });
       if (status === TaskStatus.SUBMITTED_FOR_REVIEW) {
         await tx.taskSubmission.create({
-          data: { taskId: existing.id, submittedById: user.id },
+          data: { taskId: existing.id, submittedById: user.id, notes: notes || null },
         });
         const managers = existing.assigneeId
           ? await tx.teamMembership.findMany({
@@ -137,7 +144,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         if (managerIds.length) {
           await tx.notification.createMany({ data: managerIds.map((managerId) => ({
             userId: managerId, actorId: user.id, projectId: COMPANY_TASK_PROJECT_ID, taskId: existing.id,
-            type: "TASK_SUBMITTED" as const, message: `${user.name || user.email} submitted "${existing.title}" for review`, href: "/reports",
+            type: "TASK_SUBMITTED" as const, message: `${user.name || user.email} submitted "${existing.title}" for review`, href: "/reviews",
           })) });
         }
       }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
@@ -35,7 +35,7 @@ const statusLabels: Record<TaskStatus, string> = {
 };
 const statusProgress: Record<TaskStatus, number> = {
   TODO: 0, ACCEPTED: 10, IN_PROGRESS: 50, ON_HOLD: 50, SUBMITTED_FOR_REVIEW: 90,
-  REVISION_REQUESTED: 60, APPROVED: 100, REJECTED: 100, CANCELLED: 0, DONE: 100,
+  REVISION_REQUESTED: 60, APPROVED: 100, REJECTED: 0, CANCELLED: 0, DONE: 100,
 };
 const priorityLabels: Record<TaskPriority, string> = {
   LOW: "Low",
@@ -75,11 +75,15 @@ export default function CompanyTaskBoard({
   isAdmin,
   employees,
   initialTasks,
+  initialFeedback = [],
 }: {
   isAdmin: boolean;
   employees: Employee[];
   initialTasks: CompanyTask[];
+  initialFeedback?: { id: string; taskId: string; feedback: string; reviewer: string; rating: number | null }[];
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [focus, setFocus] = useState("ACTIVE");
   const [tasks, setTasks] = useState(initialTasks);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -97,7 +101,7 @@ export default function CompanyTaskBoard({
   const [savingTask, setSavingTask] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [comments, setComments] = useState<Record<string, TaskComment[]>>({});
-  const [commentDraft, setCommentDraft] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,13 +115,31 @@ export default function CompanyTaskBoard({
 
   const currentDate = new Date();
   const today = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+  const activeTask = tasks.find((task) => task.id === expandedTaskId);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog || !expandedTaskId) return;
+    dialog.showModal();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { dialog.close(); document.body.style.overflow = previous; };
+  }, [expandedTaskId]);
+  function matchesFocus(task: CompanyTask, value: string) {
+    const closed = ["APPROVED", "DONE", "REJECTED", "CANCELLED"].includes(task.status);
+    if (value === "ACTIVE") return !closed;
+    if (value === "CLOSED") return closed;
+    if (value === "TODAY") return !closed && task.dueDate?.slice(0, 10) === today;
+    if (value === "OVERDUE") return !closed && !!task.dueDate && task.dueDate.slice(0, 10) < today;
+    if (value === "REVISION") return task.status === "REVISION_REQUESTED";
+    return true;
+  }
   const visibleTasks = tasks.filter((task) => {
     const query = search.trim().toLocaleLowerCase();
     const matchesSearch = !query
       || task.title.toLocaleLowerCase().includes(query)
       || task.description?.toLocaleLowerCase().includes(query);
     const overdue = task.status !== "DONE" && task.status !== "APPROVED" && task.status !== "CANCELLED" && task.dueDate !== null && task.dueDate.slice(0, 10) < today;
-    return matchesSearch
+    return (isAdmin || matchesFocus(task, focus)) && matchesSearch
       && (statusFilter === "ALL" || task.status === statusFilter)
       && (employeeFilter === "ALL" || task.assignee?.id === employeeFilter)
       && (priorityFilter === "ALL" || task.priority === priorityFilter)
@@ -207,7 +229,6 @@ export default function CompanyTaskBoard({
       return;
     }
     setExpandedTaskId(taskId);
-    setCommentDraft("");
     if (comments[taskId]) return;
 
     setCommentsLoading(true);
@@ -235,26 +256,26 @@ export default function CompanyTaskBoard({
       const response = await fetch(`/api/company-tasks/${taskId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: commentDraft }),
+        body: JSON.stringify({ content: commentDrafts[taskId] ?? "" }),
       });
       const data = await response.json() as { ok?: boolean; comment?: TaskComment; error?: string };
       if (!response.ok || !data.ok || !data.comment) {
         setError(data.error || "Unable to post this update.");
         return;
       }
+      setCommentDrafts((current) => ({ ...current, [taskId]: "" }));
       setComments((current) => ({
         ...current,
         [taskId]: [...(current[taskId] ?? []), data.comment!],
       }));
-      setCommentDraft("");
-    } catch {
+      } catch {
       setError("Unable to post this update. Check your connection and try again.");
     } finally {
       setCommentSubmitting(false);
     }
   }
 
-  async function updateStatus(task: CompanyTask, status: TaskStatus) {
+  async function updateStatus(task: CompanyTask, status: TaskStatus, notes?: string) {
     setPendingId(task.id);
     setError(null);
     setNotice(null);
@@ -262,7 +283,7 @@ export default function CompanyTaskBoard({
       const response = await fetch(`/api/company-tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(notes ? { notes } : {}) }),
       });
       const data = await response.json() as { ok?: boolean; task?: CompanyTask; error?: string };
       if (!response.ok || !data.ok || !data.task) {
@@ -270,6 +291,8 @@ export default function CompanyTaskBoard({
         return;
       }
       setTasks((current) => current.map((item) => item.id === task.id ? data.task! : item));
+      if (status === "ON_HOLD" && notes) setComments((current) => { const next = { ...current }; delete next[task.id]; return next; });
+      setNotice(`Task updated: ${statusLabels[status]}.`);
     } catch {
       setError("Unable to update task status. Check your connection and try again.");
     } finally {
@@ -416,10 +439,8 @@ export default function CompanyTaskBoard({
           </section>
         </>
       ) : (
-        <section className="panel-card rounded-3xl p-5 sm:p-6">
-          <p className="section-kicker">My assigned work</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white/90">Your tasks</h2>
-          <p className="mt-2 text-sm text-white/45">Update a task as you start or complete it. Your administrator can track progress.</p>
+        <section aria-label="Task priorities" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[["OVERDUE", "Overdue"], ["TODAY", "Due today"], ["REVISION", "Revisions requested"], ["ACTIVE", "Active work"], ["CLOSED", "Closed work"], ["ALL", "All tasks"]].map(([value, label]) => <button key={value} type="button" aria-pressed={focus === value} onClick={() => { setFocus(value); setStatusFilter("ALL"); setDueFilter("ALL"); setSearch(""); setPriorityFilter("ALL"); }} className={`panel-card rounded-2xl p-4 text-left ${focus === value ? "ring-2 ring-indigo-400" : ""}`}><span className="text-xs text-[var(--muted)]">{label}</span><span className="mt-2 block text-2xl font-semibold text-[var(--foreground)]">{tasks.filter((task) => matchesFocus(task, value)).length}</span></button>)}
         </section>
       )}
 
@@ -471,11 +492,13 @@ export default function CompanyTaskBoard({
         {notice ? <p role="status" className="mx-5 mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</p> : null}
 
         {visibleTasks.length ? view === "board" ? (
-          <KanbanBoard tasks={visibleTasks} isAdmin={isAdmin} pendingId={pendingId} onUpdate={updateStatus} />
+          <KanbanBoard tasks={visibleTasks} isAdmin={isAdmin} pendingId={pendingId} onUpdate={updateStatus} onOpen={(task) => void toggleComments(task.id)} />
         ) : view === "calendar" ? (
-          <TaskCalendar tasks={visibleTasks} />
+          <TaskCalendar tasks={visibleTasks} onOpen={(task) => void toggleComments(task.id)} />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="grid gap-3 p-4 md:hidden">{visibleTasks.map((task) => <article key={task.id} className="rounded-xl border border-[var(--stroke)] p-4"><button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)]">{task.title}</button><p className="my-3 text-xs text-[var(--muted)]">{statusLabels[task.status]} / {formatDueDate(task.dueDate)} / {priorityLabels[task.priority]}</p>{isAdmin ? <p className="text-xs text-[var(--muted)]">{employeeLabel(task.assignee)}</p> : <TaskActions task={task} pending={pendingId === task.id} onUpdate={updateStatus} />}</article>)}</div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-left">
               <thead className="text-[11px] uppercase tracking-wider text-white/35">
                 <tr>
@@ -493,7 +516,7 @@ export default function CompanyTaskBoard({
                   <Fragment key={task.id}>
                     <tr>
                       <td className="max-w-[30rem] px-5 py-4">
-                        <p className="text-sm font-medium text-white/85">{task.title}</p>
+                        <button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>
                         {task.description ? <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-white/40">{task.description}</p> : null}
                         {task.checklistItems.length ? (
                           <div className="mt-3 space-y-2">
@@ -571,6 +594,7 @@ export default function CompanyTaskBoard({
                         )}
                       </td>
                       <td className="px-4 py-4">
+                        {isAdmin ? (
                         <select
                           aria-label={`Status for ${task.title}`}
                           value={task.status}
@@ -582,6 +606,7 @@ export default function CompanyTaskBoard({
                             <option key={status} value={status}>{statusLabels[status]}</option>
                           ))}
                         </select>
+                        ) : <TaskActions task={task} pending={pendingId === task.id} onUpdate={updateStatus} />}
                         <div
                           className="mt-2 flex items-center gap-2"
                           role="progressbar"
@@ -609,9 +634,31 @@ export default function CompanyTaskBoard({
                         </div>
                       </td>
                     </tr>
-                    {expandedTaskId === task.id ? (
-                      <tr key={`${task.id}-comments`}>
-                        <td colSpan={isAdmin ? 5 : 4} className="bg-white/[0.025] px-5 py-4">
+                  </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          </>
+        ) : (
+          <div className="px-5 py-12 text-center">
+            <p className="text-sm font-medium text-white/70">{tasks.length ? "No tasks match these filters." : isAdmin ? "No tasks assigned yet." : "You have no assigned tasks yet."}</p>
+            {!tasks.length && isAdmin ? <p className="mt-1 text-xs text-white/40">Use the form above to assign the first one.</p> : null}
+          </div>
+        )}
+      </section>
+      {activeTask ? <dialog ref={dialogRef} aria-labelledby="task-detail-title" onClose={() => { if (!dialogRef.current?.open) setExpandedTaskId(null); }} className="fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-none w-full max-w-xl border-l border-[var(--stroke)] bg-[var(--panel)] p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-black/40">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--stroke)] p-5"><div><p className="text-xs text-[var(--muted)]">Task details</p><h2 id="task-detail-title" className="mt-1 text-xl font-semibold">{activeTask.title}</h2></div><button autoFocus type="button" onClick={() => dialogRef.current?.close()} className="secondary-button px-3 py-2">Close</button></div>
+        {[activeTask].map((task) => <div key={task.id} className="space-y-5 p-5">
+          <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatDueDate(task.dueDate)}</p>
+          <p className="whitespace-pre-wrap text-sm">{task.description || "No additional instructions."}</p>
+          {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
+          {!isAdmin ? <TaskActions task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
+          {notice ? <p role="status" className="text-sm text-emerald-600">{notice}</p> : null}
+          {error ? <p role="alert" className="text-sm text-rose-500">{error}</p> : null}
+          {initialFeedback.filter((review) => review.taskId === task.id).length ? <section><h3 className="mb-2 text-sm font-semibold">Review feedback</h3>{initialFeedback.filter((review) => review.taskId === task.id).map((review) => <article key={review.id} className="mb-2 rounded-xl border border-[var(--stroke)] p-3"><p className="whitespace-pre-wrap text-sm">{review.feedback}</p><p className="mt-2 text-xs text-[var(--muted)]">{review.reviewer}{review.rating ? ` / ${review.rating}/5` : ""}</p></article>)}</section> : null}
+          {task.checklistItems.length ? <section><h3 className="mb-2 text-sm font-semibold">Checklist</h3>{task.checklistItems.map((item) => <label key={item.id} className="flex items-start gap-3 py-2 text-sm"><input type="checkbox" checked={item.isCompleted} disabled={isAdmin || pendingId === task.id} onChange={(event) => void updateChecklistItem(task, item, event.target.checked)} /><span className={item.isCompleted ? "line-through opacity-60" : ""}>{item.title}</span></label>)}</section> : null}
                           <div className="mx-auto max-w-3xl">
                             <h3 className="text-sm font-semibold text-white/80">Progress updates</h3>
                             {commentsLoading ? <p className="mt-3 text-xs text-white/40">Loading updates...</p> : null}
@@ -635,32 +682,21 @@ export default function CompanyTaskBoard({
                                 required
                                 maxLength={2000}
                                 rows={2}
-                                value={commentDraft}
-                                onChange={(event) => setCommentDraft(event.target.value)}
+                                aria-label="Progress update"
+                                value={commentDrafts[task.id] ?? ""}
+                                onChange={(event) => setCommentDrafts((current) => ({ ...current, [task.id]: event.target.value }))}
                                 placeholder={isAdmin ? "Add an update for the employee..." : "Share progress or explain what's blocking you..."}
                                 className="soft-input min-h-11 flex-1 rounded-xl px-3 py-2 text-sm"
                               />
-                              <button type="submit" disabled={commentSubmitting || !commentDraft.trim()} className="secondary-button h-10 px-4 text-xs font-semibold disabled:opacity-50">
+                              <button type="submit" disabled={commentSubmitting || !(commentDrafts[task.id] ?? "").trim()} className="secondary-button h-10 px-4 text-xs font-semibold disabled:opacity-50">
                                 {commentSubmitting ? "Posting..." : "Post update"}
                               </button>
                             </form>
                           </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="px-5 py-12 text-center">
-            <p className="text-sm font-medium text-white/70">{tasks.length ? "No tasks match these filters." : isAdmin ? "No tasks assigned yet." : "You have no assigned tasks yet."}</p>
-            {!tasks.length && isAdmin ? <p className="mt-1 text-xs text-white/40">Use the form above to assign the first one.</p> : null}
-          </div>
-        )}
-      </section>
+
+        </div>)}
+      </dialog> : null}
+
     </div>
   );
 }
@@ -676,36 +712,31 @@ function availableEmployeeStatuses(status: TaskStatus): TaskStatus[] {
   return [status, ...(transitions[status] ?? [])];
 }
 
-function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate }: {
-  tasks: CompanyTask[]; isAdmin: boolean; pendingId: string | null; onUpdate: (task: CompanyTask, status: TaskStatus) => void;
+function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
+  tasks: CompanyTask[]; onOpen: (task: CompanyTask) => void; isAdmin: boolean; pendingId: string | null; onUpdate: (task: CompanyTask, status: TaskStatus, notes?: string) => void;
 }) {
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const columns: { title: string; status: TaskStatus; matches: TaskStatus[] }[] = [
     { title: "To do", status: "TODO", matches: ["TODO", "ACCEPTED"] },
     { title: "In progress", status: "IN_PROGRESS", matches: ["IN_PROGRESS"] },
     { title: "On hold", status: "ON_HOLD", matches: ["ON_HOLD", "REVISION_REQUESTED"] },
     { title: "In review", status: "SUBMITTED_FOR_REVIEW", matches: ["SUBMITTED_FOR_REVIEW"] },
-    { title: "Completed", status: "APPROVED", matches: ["APPROVED", "DONE", "REJECTED", "CANCELLED"] },
+    { title: "Completed", status: "APPROVED", matches: ["APPROVED", "DONE"] },
+    { title: "Closed", status: "CANCELLED", matches: ["REJECTED", "CANCELLED"] },
   ];
-  return <div className="grid gap-3 overflow-x-auto p-4 md:grid-cols-2 xl:grid-cols-5">
-    {columns.map((column) => <section key={column.status} onDragOver={(event) => { if (!isAdmin) event.preventDefault(); }} onDrop={(event) => {
-      event.preventDefault();
-      if (isAdmin || !draggedId) return;
-      const task = tasks.find((item) => item.id === draggedId);
-      if (task && availableEmployeeStatuses(task.status).includes(column.status)) onUpdate(task, column.status);
-      setDraggedId(null);
-    }} className="min-h-52 rounded-xl border border-[var(--stroke)] bg-[var(--panel-soft)] p-2.5">
+  return <div className="grid gap-3 overflow-x-auto p-4 md:grid-cols-2 xl:grid-cols-6">
+    {columns.map((column) => <section key={column.status} className="min-h-52 rounded-xl border border-[var(--stroke)] bg-[var(--panel-soft)] p-2.5">
       <div className="mb-2 flex items-center justify-between px-1"><h3 className="text-xs font-semibold text-[var(--foreground)]">{column.title}</h3><span className="rounded-md bg-[var(--panel)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">{tasks.filter((task) => column.matches.includes(task.status)).length}</span></div>
-      <div className="grid content-start gap-2">{tasks.filter((task) => column.matches.includes(task.status)).map((task) => <article key={task.id} draggable={!isAdmin && pendingId !== task.id} onDragStart={(event) => { setDraggedId(task.id); event.dataTransfer.setData("text/plain", task.id); }} onDragEnd={() => setDraggedId(null)} className={`rounded-lg border border-[var(--stroke)] bg-[var(--panel)] p-3 shadow-sm ${!isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}>
-        <p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p>{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
+      <div className="grid content-start gap-2">{tasks.filter((task) => column.matches.includes(task.status)).map((task) => <article key={task.id} className="rounded-lg border border-[var(--stroke)] bg-[var(--panel)] p-3 shadow-sm">
+        <button type="button" onClick={() => onOpen(task)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatDueDate(task.dueDate)}</time> : null}</div>
         {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-semibold text-indigo-700">{(task.assignee.name || task.assignee.email).slice(0, 1).toUpperCase()}</span><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}
+        {!isAdmin ? <div className="mt-3"><TaskActions task={task} pending={pendingId === task.id} onUpdate={onUpdate} /></div> : null}
       </article>)}</div>
     </section>)}
   </div>;
 }
 
-function TaskCalendar({ tasks }: { tasks: CompanyTask[] }) {
+function TaskCalendar({ tasks, onOpen }: { tasks: CompanyTask[]; onOpen: (task: CompanyTask) => void }) {
   const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
   const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -719,8 +750,20 @@ function TaskCalendar({ tasks }: { tasks: CompanyTask[] }) {
     <div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-semibold text-[var(--foreground)]">{month.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h3><div className="flex gap-2"><button type="button" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="secondary-button h-8 w-8">‹</button><button type="button" onClick={() => { const now = new Date(); setMonth(new Date(now.getFullYear(), now.getMonth(), 1)); }} className="secondary-button h-8 px-3 text-xs">Today</button><button type="button" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="secondary-button h-8 w-8">›</button></div></div>
     <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-[var(--stroke)]">{weekDays.map((day) => <div key={day} className="border-b border-[var(--stroke)] bg-[var(--panel-soft)] px-2 py-2 text-center text-[10px] font-semibold text-[var(--muted)]">{day}</div>)}{cells.map((day, index) => {
       const dateTasks = day ? tasks.filter((task) => task.dueDate?.slice(0, 10) === key(day)) : [];
-      return <div key={index} className={`min-h-24 border-b border-r border-[var(--stroke)] p-1.5 ${day ? "bg-[var(--panel)]" : "bg-[var(--panel-soft)]"}`}><span className="text-[10px] text-[var(--muted)]">{day ?? ""}</span><div className="mt-1 grid gap-1">{dateTasks.slice(0, 3).map((task) => <p key={task.id} title={task.title} className="truncate rounded bg-indigo-50 px-1.5 py-1 text-[9px] font-medium text-indigo-700">{task.title}</p>)}{dateTasks.length > 3 ? <p className="px-1 text-[9px] text-[var(--muted)]">+{dateTasks.length - 3} more</p> : null}</div></div>;
+      return <div key={index} className={`min-h-24 border-b border-r border-[var(--stroke)] p-1.5 ${day ? "bg-[var(--panel)]" : "bg-[var(--panel-soft)]"}`}><span className="text-[10px] text-[var(--muted)]">{day ?? ""}</span><div className="mt-1 grid gap-1">{dateTasks.slice(0, 3).map((task) => <button type="button" onClick={() => onOpen(task)} key={task.id} title={task.title} className="truncate rounded bg-indigo-50 px-1.5 py-1 text-[9px] font-medium text-indigo-700">{task.title}</button>)}{dateTasks.length > 3 ? <p className="px-1 text-[9px] text-[var(--muted)]">+{dateTasks.length - 3} more</p> : null}</div></div>;
     })}</div>
     {!tasks.some((task) => task.dueDate) ? <p className="mt-4 text-center text-xs text-[var(--muted)]">No tasks have due dates in this view.</p> : null}
   </div>;
+}
+
+function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: boolean; onUpdate: (task: CompanyTask, status: TaskStatus, notes?: string) => void }) {
+  const [decision, setDecision] = useState<TaskStatus | null>(null);
+  const [notes, setNotes] = useState("");
+  const actions: Partial<Record<TaskStatus, [TaskStatus, string][]>> = {
+    TODO: [["IN_PROGRESS", "Start task"]], ACCEPTED: [["IN_PROGRESS", "Start task"]],
+    IN_PROGRESS: [["SUBMITTED_FOR_REVIEW", "Submit for review"], ["ON_HOLD", "Put on hold"]],
+    ON_HOLD: [["IN_PROGRESS", "Resume task"]],
+    REVISION_REQUESTED: [["IN_PROGRESS", "Work on revision"], ["SUBMITTED_FOR_REVIEW", "Resubmit for review"]],
+  };
+  return <div className="flex flex-wrap gap-2">{decision && availableEmployeeStatuses(task.status).includes(decision) && decision !== task.status ? <form className="w-full space-y-2" onSubmit={(event) => { event.preventDefault(); onUpdate(task, decision, notes.trim()); }}><label className="grid gap-2 text-xs">{decision === "ON_HOLD" ? "What is blocking this task?" : "Submission notes (optional)"}<textarea className="soft-input w-full rounded-lg p-2 text-sm" required={decision === "ON_HOLD"} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} /></label><div className="flex gap-2"><button disabled={pending || (decision === "ON_HOLD" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? "Saving..." : decision === "ON_HOLD" ? "Confirm hold" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => setDecision(null)} className="secondary-button px-3 py-2 text-xs">Cancel</button></div></form> : null}{(actions[task.status] ?? []).map(([status, label], index) => <button key={status} type="button" disabled={pending} onClick={() => { if (status === "ON_HOLD" || status === "SUBMITTED_FOR_REVIEW") { setDecision(status); } else onUpdate(task, status); }} className={`${index === 0 ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{pending ? "Saving..." : label}</button>)}{task.status === "SUBMITTED_FOR_REVIEW" ? <p className="text-xs text-[var(--muted)]">Awaiting manager review</p> : null}</div>;
 }
