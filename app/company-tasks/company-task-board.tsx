@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
+type TaskAction = TaskStatus | "REPORT_BLOCKER";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 type TaskView = "list" | "board" | "calendar";
 type Employee = { id: string; name: string | null; email: string };
@@ -275,7 +276,7 @@ export default function CompanyTaskBoard({
     }
   }
 
-  async function updateStatus(task: CompanyTask, status: TaskStatus, notes?: string) {
+  async function updateStatus(task: CompanyTask, status: TaskAction, notes?: string) {
     setPendingId(task.id);
     setError(null);
     setNotice(null);
@@ -283,18 +284,20 @@ export default function CompanyTaskBoard({
       const response = await fetch(`/api/company-tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, ...(notes ? { notes } : {}) }),
+        body: JSON.stringify({ ...(status === "REPORT_BLOCKER" ? { action: status } : { status }), ...(notes ? { notes } : {}) }),
       });
       const data = await response.json() as { ok?: boolean; task?: CompanyTask; error?: string };
       if (!response.ok || !data.ok || !data.task) {
         setError(data.error || "Unable to update task status.");
-        return;
+        return false;
       }
       setTasks((current) => current.map((item) => item.id === task.id ? data.task! : item));
-      if (status === "ON_HOLD" && notes) setComments((current) => { const next = { ...current }; delete next[task.id]; return next; });
-      setNotice(`Task updated: ${statusLabels[status]}.`);
+      if ((status === "ON_HOLD" || status === "REPORT_BLOCKER") && notes) setComments((current) => { const next = { ...current }; delete next[task.id]; return next; });
+      setNotice(status === "REPORT_BLOCKER" ? "Blocker reported. Management has been notified; the task status and deadline are unchanged." : `Task updated: ${statusLabels[status]}.`);
+      return true;
     } catch {
       setError("Unable to update task status. Check your connection and try again.");
+      return false;
     } finally {
       setPendingId(null);
     }
@@ -602,7 +605,7 @@ export default function CompanyTaskBoard({
                           disabled={pendingId === task.id}
                           className="soft-input h-9 rounded-lg px-2 text-xs disabled:opacity-50"
                         >
-                          {(isAdmin ? [task.status, "CANCELLED" as TaskStatus] : availableEmployeeStatuses(task.status)).map((status) => (
+                          {(isAdmin ? Array.from(new Set([task.status, ...(["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? ["ON_HOLD" as TaskStatus] : task.status === "ON_HOLD" ? ["IN_PROGRESS" as TaskStatus] : []), ...(!["APPROVED", "CANCELLED"].includes(task.status) ? ["CANCELLED" as TaskStatus] : [])])) : availableEmployeeStatuses(task.status)).map((status) => (
                             <option key={status} value={status}>{statusLabels[status]}</option>
                           ))}
                         </select>
@@ -653,6 +656,8 @@ export default function CompanyTaskBoard({
         {[activeTask].map((task) => <div key={task.id} className="space-y-5 p-5">
           <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatDueDate(task.dueDate)}</p>
           <p className="whitespace-pre-wrap text-sm">{task.description || "No additional instructions."}</p>
+          {isAdmin && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
+          {isAdmin && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
           {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
           {!isAdmin ? <TaskActions task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
           {notice ? <p role="status" className="text-sm text-emerald-600">{notice}</p> : null}
@@ -704,16 +709,16 @@ export default function CompanyTaskBoard({
 function availableEmployeeStatuses(status: TaskStatus): TaskStatus[] {
   const transitions: Partial<Record<TaskStatus, TaskStatus[]>> = {
     TODO: ["ACCEPTED", "IN_PROGRESS"],
-    ACCEPTED: ["IN_PROGRESS", "ON_HOLD"],
-    IN_PROGRESS: ["ON_HOLD", "SUBMITTED_FOR_REVIEW"],
-    ON_HOLD: ["IN_PROGRESS"],
+    ACCEPTED: ["IN_PROGRESS"],
+    IN_PROGRESS: ["SUBMITTED_FOR_REVIEW"],
+    ON_HOLD: [],
     REVISION_REQUESTED: ["IN_PROGRESS", "SUBMITTED_FOR_REVIEW"],
   };
   return [status, ...(transitions[status] ?? [])];
 }
 
 function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
-  tasks: CompanyTask[]; onOpen: (task: CompanyTask) => void; isAdmin: boolean; pendingId: string | null; onUpdate: (task: CompanyTask, status: TaskStatus, notes?: string) => void;
+  tasks: CompanyTask[]; onOpen: (task: CompanyTask) => void; isAdmin: boolean; pendingId: string | null; onUpdate: (task: CompanyTask, status: TaskAction, notes?: string) => Promise<boolean>;
 }) {
   const columns: { title: string; status: TaskStatus; matches: TaskStatus[] }[] = [
     { title: "To do", status: "TODO", matches: ["TODO", "ACCEPTED"] },
@@ -756,14 +761,25 @@ function TaskCalendar({ tasks, onOpen }: { tasks: CompanyTask[]; onOpen: (task: 
   </div>;
 }
 
-function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: boolean; onUpdate: (task: CompanyTask, status: TaskStatus, notes?: string) => void }) {
-  const [decision, setDecision] = useState<TaskStatus | null>(null);
+function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: boolean; onUpdate: (task: CompanyTask, status: TaskAction, notes?: string) => Promise<boolean> }) {
+  const [decision, setDecision] = useState<TaskAction | null>(null);
   const [notes, setNotes] = useState("");
-  const actions: Partial<Record<TaskStatus, [TaskStatus, string][]>> = {
-    TODO: [["IN_PROGRESS", "Start task"]], ACCEPTED: [["IN_PROGRESS", "Start task"]],
-    IN_PROGRESS: [["SUBMITTED_FOR_REVIEW", "Submit for review"], ["ON_HOLD", "Put on hold"]],
-    ON_HOLD: [["IN_PROGRESS", "Resume task"]],
-    REVISION_REQUESTED: [["IN_PROGRESS", "Work on revision"], ["SUBMITTED_FOR_REVIEW", "Resubmit for review"]],
+  const actions: Partial<Record<TaskStatus, [TaskAction, string][]>> = {
+    TODO: [["IN_PROGRESS", "Start task"], ["REPORT_BLOCKER", "Report blocker"]],
+    ACCEPTED: [["IN_PROGRESS", "Start task"], ["REPORT_BLOCKER", "Report blocker"]],
+    IN_PROGRESS: [["SUBMITTED_FOR_REVIEW", "Submit for review"], ["REPORT_BLOCKER", "Report blocker"]],
+    REVISION_REQUESTED: [["IN_PROGRESS", "Work on revision"], ["SUBMITTED_FOR_REVIEW", "Resubmit for review"], ["REPORT_BLOCKER", "Report blocker"]],
   };
-  return <div className="flex flex-wrap gap-2">{decision && availableEmployeeStatuses(task.status).includes(decision) && decision !== task.status ? <form className="w-full space-y-2" onSubmit={(event) => { event.preventDefault(); onUpdate(task, decision, notes.trim()); }}><label className="grid gap-2 text-xs">{decision === "ON_HOLD" ? "What is blocking this task?" : "Submission notes (optional)"}<textarea className="soft-input w-full rounded-lg p-2 text-sm" required={decision === "ON_HOLD"} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} /></label><div className="flex gap-2"><button disabled={pending || (decision === "ON_HOLD" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? "Saving..." : decision === "ON_HOLD" ? "Confirm hold" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => setDecision(null)} className="secondary-button px-3 py-2 text-xs">Cancel</button></div></form> : null}{(actions[task.status] ?? []).map(([status, label], index) => <button key={status} type="button" disabled={pending} onClick={() => { if (status === "ON_HOLD" || status === "SUBMITTED_FOR_REVIEW") { setDecision(status); } else onUpdate(task, status); }} className={`${index === 0 ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{pending ? "Saving..." : label}</button>)}{task.status === "SUBMITTED_FOR_REVIEW" ? <p className="text-xs text-[var(--muted)]">Awaiting manager review</p> : null}</div>;
+  const available = actions[task.status] ?? [];
+  return <div className="flex flex-wrap gap-2">
+    {decision && available.some(([action]) => action === decision) ? <form className="w-full space-y-2" onSubmit={async (event) => { event.preventDefault(); if (await onUpdate(task, decision, notes.trim())) { setDecision(null); setNotes(""); } }}>
+      <label className="grid gap-2 text-xs">{decision === "REPORT_BLOCKER" ? "What is blocking this task?" : "Submission notes (optional)"}
+        <textarea className="soft-input w-full rounded-lg p-2 text-sm" required={decision === "REPORT_BLOCKER"} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} />
+      </label>
+      <div className="flex gap-2"><button disabled={pending || (decision === "REPORT_BLOCKER" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? "Saving..." : decision === "REPORT_BLOCKER" ? "Send blocker report" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => setDecision(null)} className="secondary-button px-3 py-2 text-xs">Cancel</button></div>
+    </form> : null}
+    {available.map(([status, label], index) => <button key={status} type="button" disabled={pending} onClick={() => { if (status === "REPORT_BLOCKER" || status === "SUBMITTED_FOR_REVIEW") setDecision(status); else onUpdate(task, status); }} className={`${index === 0 ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{pending ? "Saving..." : label}</button>)}
+    {task.status === "SUBMITTED_FOR_REVIEW" ? <p className="text-xs text-[var(--muted)]">Awaiting manager review</p> : null}
+    {task.status === "ON_HOLD" ? <p className="text-xs text-[var(--muted)]">On hold. Your manager or administrator must resume this task.</p> : null}
+  </div>;
 }
