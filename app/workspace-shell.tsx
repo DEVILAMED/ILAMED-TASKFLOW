@@ -14,11 +14,13 @@ import WorkspaceNavigation, { WorkspaceNavigationFallback } from "@/app/workspac
 import type { WorkspaceRole } from "@/lib/workspace-navigation";
 import { Menu } from "lucide-react";
 import NewCompanyTaskDialog from "@/app/new-company-task-dialog";
+import DashboardGuide from "@/app/dashboard-guide";
 
 type WorkspaceShellProps = {
   title: string;
   currentWorkspace: "personal" | "projects";
   userName: string;
+  userId?: string;
   userEmail: string;
   userRole: WorkspaceRole;
   userDesignation?: string;
@@ -34,7 +36,7 @@ function Brand() {
   </Link>;
 }
 
-export function WorkspaceShell({ title, currentWorkspace, userName, userEmail, userRole, userDesignation, userAction, topbarRight, taskEmployees = [], children }: WorkspaceShellProps) {
+export function WorkspaceShell({ title, currentWorkspace, userName, userId, userEmail, userRole, userDesignation, userAction, topbarRight, taskEmployees = [], children }: WorkspaceShellProps) {
   const pathname = usePathname();
   const activeWorkspace = pathname === "/todos" ? "personal" : currentWorkspace;
   const initials = (userName || userEmail || "U").trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
@@ -55,7 +57,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userEmail, u
     <PresenceHeartbeat />
     {activeWorkspace === "projects" && userRole !== "USER" ? <Suspense fallback={null}><NewCompanyTaskDialog employees={taskEmployees} /></Suspense> : null}
     <a href="#workspace-main" className="workspace-skip-link">Skip to content</a>
-    <aside className="workspace-sidebar hidden shrink-0 lg:sticky lg:top-0 lg:flex lg:h-screen">
+    <aside className="workspace-sidebar hidden shrink-0 lg:sticky lg:top-0 lg:flex lg:h-screen" data-guide="sidebar">
       <Brand />
       <div className="workspace-sidebar-divider" />
       <div className="workspace-navigation-wrap">{navigation}</div>
@@ -66,15 +68,16 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userEmail, u
     </aside>
     <div className="min-w-0 flex-1">
       <header className="workspace-topbar">
-        <details className="workspace-mobile-nav relative lg:hidden">
+        <details className="workspace-mobile-nav relative lg:hidden" data-guide="mobile-menu">
           <summary aria-label="Open navigation" className="workspace-control flex h-9 w-9 items-center justify-center rounded-lg"><Menu aria-hidden="true" size={19} strokeWidth={1.8} /></summary>
           <div className="workspace-mobile-panel"><Brand />{navigation}<div className="workspace-sidebar-footer">{userProfile}<div className="workspace-signout">{userAction}</div></div></div>
         </details>
         <p className="workspace-topbar-label" title={title}>{activeWorkspace === "projects" ? "TEAM WORKSPACE" : "PERSONAL WORKSPACE"}</p>
         <div className="ml-auto flex items-center gap-3 sm:gap-4">
           {topbarRight ? <div className="hidden xl:block">{topbarRight}</div> : null}
-          <div className="workspace-topbar-notifications"><NotificationsInbox /></div>
-          <details className="workspace-account-menu">
+          <DashboardGuide account={userId || userEmail} role={userRole} workspace={activeWorkspace}/>
+          <div className="workspace-topbar-notifications" data-guide="notifications"><NotificationsInbox /></div>
+          <details className="workspace-account-menu" data-guide="account-menu">
             <summary aria-label={`Account options for ${userName}`} className="workspace-user-chip">
               <span className="workspace-avatar">{initials}</span>
               <span className="workspace-topbar-user"><span className="workspace-profile-name">{userName}</span><span className="workspace-profile-role">{role}</span></span>
@@ -83,7 +86,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userEmail, u
           </details>
         </div>
       </header>
-      <main id="workspace-main" tabIndex={-1} className="workspace-content"><div className="workspace-content-inner">{children}</div></main>
+      <main id="workspace-main" tabIndex={-1} className="workspace-content"><div className="workspace-content-inner" data-guide="page">{children}</div></main>
     </div>
   </div>;
 }

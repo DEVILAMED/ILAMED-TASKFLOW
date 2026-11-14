@@ -15,7 +15,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
     ...(user.role === "MANAGER" ? { teamMemberships: { some: { teamId: { in: teams.map(team => team.teamId) } } } } : {}),
   }, select: { id: true, name: true, email: true }, orderBy: [{ name: "asc" }, { email: "asc" }] });
 
-  return <WorkspaceShell title="Team workspace" currentWorkspace="projects" userRole={user.role} userName={user.name || user.email} userEmail={user.email} userDesignation={profile?.designation ?? undefined} userAction={<LogoutButton />} taskEmployees={employees}>
+  return <WorkspaceShell title="Team workspace" currentWorkspace="projects" userRole={user.role} userId={user.id} userName={user.name || user.email} userEmail={user.email} userDesignation={profile?.designation ?? undefined} userAction={<LogoutButton />} taskEmployees={employees}>
     {children}
   </WorkspaceShell>;
 }

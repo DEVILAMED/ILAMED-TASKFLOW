@@ -25,7 +25,7 @@ function NavIcon({ name }: { name: WorkspaceNavItem["icon"] }) {
 
 function NavigationItems({ role, workspace = "projects", activeHref, onNavigate }: { role: WorkspaceRole; workspace?: "personal" | "projects"; activeHref?: string; onNavigate?: (event: MouseEvent<HTMLAnchorElement>, href: string) => void }) {
   return <nav aria-label="Main navigation" className="workspace-navigation">
-    {getWorkspaceNavItems(role, workspace).map((item) => <Link key={item.href} href={item.href} aria-current={activeHref === item.href ? "page" : undefined} onClick={(event) => onNavigate?.(event, item.href)} className={`workspace-nav-item ${activeHref === item.href ? "workspace-nav-active" : ""}`}>
+    {getWorkspaceNavItems(role, workspace).map((item) => <Link key={item.href} href={item.href} data-guide-link={item.href} aria-current={activeHref === item.href ? "page" : undefined} onClick={(event) => onNavigate?.(event, item.href)} className={`workspace-nav-item ${activeHref === item.href ? "workspace-nav-active" : ""}`}>
       <NavIcon name={item.icon} /><span className="min-w-0 flex-1">{item.label}</span>
     </Link>)}
   </nav>;

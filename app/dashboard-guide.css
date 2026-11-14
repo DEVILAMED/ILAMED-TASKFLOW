@@ -1,0 +1,38 @@
+.workspace-guide-launch { display: inline-flex; width: 32px; height: 36px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; }
+.workspace-guide-launch:hover { background: var(--panel-soft); }
+.dashboard-guide-dialog { position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; overflow: hidden; margin: 0; border: 0; padding: 0; background: transparent; color: var(--foreground); }
+.dashboard-guide-dialog::backdrop { background: transparent; }
+.dashboard-guide-shade { position: absolute; inset: 0; pointer-events: none; }
+.dashboard-guide-spotlight { position: fixed; pointer-events: none; border: 2px solid #a699ff; border-radius: 10px; box-shadow: 0 0 0 4px rgb(169 153 255 / 16%); }
+.dashboard-guide-card { position: fixed; width: min(380px,calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--stroke); border-radius: 16px; padding: 22px; background: var(--panel); color: var(--foreground); box-shadow: 0 18px 70px rgb(0 0 0 / 24%); }
+.dashboard-guide-card.is-welcome { width: min(440px,calc(100vw - 32px)); padding: 26px; }
+.dashboard-guide-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dashboard-guide-label { display: flex; align-items: center; gap: 7px; color: var(--accent); font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; }
+.dashboard-guide-close { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 3px; color: var(--muted); }
+.dashboard-guide-close:hover { background: var(--panel-soft); color: var(--foreground); }
+.dashboard-guide-welcome-icon { display: grid; width: 58px; height: 58px; place-items: center; margin-top: 20px; border: 1px solid #dcd5ff; border-radius: 16px; background: #f1eeff; color: #5141d9; }
+.dashboard-guide-card h2 { margin: 18px 0 9px; font-size: 21px; font-weight: 650; letter-spacing: -.035em; line-height: 28px; }
+.dashboard-guide-card.is-welcome h2 { font-size: 25px; line-height: 32px; }
+.dashboard-guide-card p { color: var(--muted); font-size: 13px; line-height: 22px; }
+.dashboard-guide-welcome-list { display: grid; gap: 10px; margin-top: 20px; padding: 16px; border-radius: 10px; background: var(--panel-soft); }
+.dashboard-guide-welcome-list li { display: flex; align-items: center; gap: 9px; font-size: 12px; line-height: 18px; }
+.dashboard-guide-welcome-list svg { flex-shrink: 0; color: #11958d; }
+.dashboard-guide-card .dashboard-guide-duration { margin-top: 16px; color: var(--muted); font-size: 11px; }
+.dashboard-guide-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; }
+.dashboard-guide-actions > .accent-button { display: inline-flex; min-height: 37px; align-items: center; justify-content: center; gap: 9px; border-radius: 8px; padding: 8px 15px; font-size: 13px; font-weight: 500; }
+.dashboard-guide-skip { color: var(--muted); font-size: 12px; line-height: 20px; }
+.dashboard-guide-skip:hover { color: var(--foreground); text-decoration: underline; }
+.dashboard-guide-back { display: inline-flex; align-items: center; gap: 6px; color: var(--foreground); font-size: 12px; }
+.dashboard-guide-back:disabled { cursor: default; opacity: .35; }
+.dashboard-guide-skip-bottom { display: block; margin: 14px auto 0; font-size: 11px; }
+.dashboard-guide-progress { display: flex; gap: 4px; margin-top: 14px; }
+.dashboard-guide-progress > span { height: 3px; flex: 1; border-radius: 5px; background: var(--stroke); }
+.dashboard-guide-progress > span.is-past { background: var(--accent); }
+.dashboard-guide-card button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+html[data-theme="dark"] .dashboard-guide-welcome-icon { border-color: var(--stroke); background: var(--panel-soft); color: var(--accent); }
+@media (max-width: 639px) {
+  .dashboard-guide-card, .dashboard-guide-card.is-welcome { padding: 20px; }
+  .dashboard-guide-card.is-welcome h2 { font-size: 23px; line-height: 29px; }
+  .dashboard-guide-welcome-list { padding: 12px; }
+  .dashboard-guide-card p { font-size: 12px; line-height: 20px; }
+}

@@ -8,6 +8,7 @@ export function WorkspaceSwitcher({ current }: WorkspaceSwitcherProps) {
   return (
     <nav
       aria-label="Workspaces"
+      data-guide="workspaces"
       className="workspace-switcher w-full"
     >
       <Link
