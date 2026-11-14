@@ -30,7 +30,7 @@ export default function LoginForm() {
       if (response.ok) {
         const data = await response.json();
         startTransition(() => {
-          router.push(data.user?.role === "ADMIN" ? "/admin" : data.user?.role === "MANAGER" ? "/manager" : "/company-tasks");
+          router.push(data.user?.role === "ADMIN" ? "/admin" : data.user?.role === "MANAGER" ? "/manager" : "/dashboard");
           router.refresh();
         });
         return;

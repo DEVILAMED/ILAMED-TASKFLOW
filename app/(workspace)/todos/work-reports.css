@@ -1,0 +1,66 @@
+.work-reports-period { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.work-reports-period > div:last-child { display: flex; align-items: flex-end; gap: 10px; }
+.work-reports-period h2 { margin-bottom: 3px; }
+.work-reports-period input { min-width: 180px; }
+.work-report-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.work-report-metrics strong { font-size: 25px; }
+.work-report-combine { display: flex; align-items: center; gap: 16px; }
+.work-report-combine > div { flex: 1; }
+.work-report-combine > button { flex-shrink: 0; gap: 8px; }
+.work-report-combine h2 { margin-bottom: 3px; }
+.work-report-editor-intro { margin: -5px 0 20px; }
+.work-report-editor { display: grid; gap: 20px; }
+.work-report-editor > .workspace-form-error { margin-top: 12px; }
+.work-report-editor-date { display: flex; align-items: flex-end; gap: 16px; }
+.work-report-editor-date > label { flex: 1; }
+.work-report-editor-date > span { flex: 1; padding-bottom: 9px; font-size: 11px; }
+.work-report-fields { display: grid; min-width: 0; gap: 16px; }
+.work-report-fields:disabled { opacity: .55; }
+.work-report-optional-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.work-report-optional { margin-top: -4px; color: var(--muted); font-size: 10px; line-height: 16px; }
+.work-report-hours { max-width: 180px; }
+.work-report-editor .workspace-dialog-actions > button { gap: 8px; }
+.work-report-editor + .workspace-form-error { margin-top: 12px; }
+.work-daily-reports > .employee-panel-heading > span { font-size: 12px; }
+.work-daily-reports .personal-empty > svg { margin: 0 auto 12px; color: var(--muted); }
+.work-daily-list { margin-top: 16px; }
+.work-daily-list > article { display: grid; grid-template-columns: minmax(180px,1fr) minmax(0,2fr) auto; align-items: center; gap: 20px; border-top: 1px solid var(--stroke); padding: 18px 0; }
+.work-daily-date { display: flex; align-items: center; gap: 10px; }
+.work-daily-date > svg { flex-shrink: 0; color: var(--muted); }
+.work-daily-date button { text-align: left; font-size: 13px; font-weight: 500; }
+.work-daily-date button:hover { color: var(--accent); text-decoration: underline; }
+.work-daily-date span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.work-daily-excerpt { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; white-space: pre-line; color: var(--muted); font-size: 12px; line-height: 20px; }
+.work-daily-actions { display: flex; align-items: center; gap: 14px; }
+.work-daily-actions > button { font-size: 11px; }
+.work-monthly-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--stroke); padding-bottom: 20px; }
+.work-monthly-heading h2 { margin: 4px 0; font-size: 22px; font-weight: 600; }
+.work-report-downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+.work-report-downloads > button { min-height: 32px; gap: 7px; padding: 6px 12px; font-size: 12px; }
+.work-monthly-day { border-bottom: 1px solid var(--stroke); padding: 24px 0; }
+.work-monthly-day:last-child { border: 0; padding-bottom: 0; }
+.work-monthly-day > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.work-monthly-day h3 { font-size: 15px; font-weight: 600; }
+.work-monthly-day span { color: var(--muted); font-size: 12px; }
+.work-monthly-day h4 { margin-top: 16px; color: var(--muted); font-family: var(--font-mono); font-size: 10px; font-weight: 400; text-transform: uppercase; }
+.work-monthly-day p { margin-top: 5px; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 13px; line-height: 23px; }
+.work-report-delete-actions { margin-top: 24px; }
+@media (max-width: 1023px) {
+  .work-daily-list > article { grid-template-columns: minmax(0,1fr) auto; gap: 12px; }
+  .work-daily-excerpt { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 639px) {
+  .work-reports-period { align-items: stretch; flex-direction: column; gap: 16px; }
+  .work-reports-period > div:last-child > label { flex: 1; }
+  .work-reports-period input { min-width: 0; }
+  .work-report-metrics { grid-template-columns: 1fr; }
+  .work-report-metrics .employee-summary-card { height: 76px; }
+  .work-report-combine { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .work-report-combine > div { flex-basis: calc(100% - 58px); }
+  .work-report-combine > button { margin-left: 52px; }
+  .work-report-optional-fields { grid-template-columns: 1fr; }
+  .work-daily-list > article { grid-template-columns: 1fr; }
+  .work-daily-excerpt { grid-row: auto; }
+  .work-daily-actions { justify-content: flex-end; }
+  .work-report-editor-date { align-items: stretch; flex-direction: column; gap: 6px; }
+}

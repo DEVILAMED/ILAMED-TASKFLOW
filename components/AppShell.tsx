@@ -139,7 +139,7 @@ export function AppShell({
         <div className="border-t border-white/[0.07] px-3 py-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-semibold text-indigo-300">
-              {initials}
+              {initials}\0/\
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-white/70">

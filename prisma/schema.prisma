@@ -37,6 +37,7 @@ model User {
   teamMemberships   TeamMembership[]
   notifications     Notification[]       @relation("NotificationRecipient")
   sentNotifications Notification[]       @relation("NotificationActor")
+  dailyWorkReports  DailyWorkReport[]
 }
 
 model Session {
@@ -374,6 +375,21 @@ model TodoMyDayEntry {
   @@unique([userId, taskId])
   @@index([userId, date])
   @@index([taskId])
+}
+
+model DailyWorkReport {
+  id            String   @id @default(uuid())
+  userId        String
+  reportDate    DateTime @db.Date
+  completedWork String
+  nextSteps     String?
+  blockers      String?
+  minutesWorked Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reportDate])
 }
 
 model TodoTaskStep {

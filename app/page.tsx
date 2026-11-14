@@ -6,7 +6,7 @@ import ThemeToggle from "@/app/theme-toggle";
 
 export default async function Home() {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === "ADMIN" ? "/admin" : user.role === "MANAGER" ? "/manager" : "/company-tasks");
+  if (user) redirect(user.role === "ADMIN" ? "/admin" : user.role === "MANAGER" ? "/manager" : "/dashboard");
 
   return (
     <main className="home-theme relative flex min-h-screen items-center px-5 py-8 sm:px-8 sm:py-12">

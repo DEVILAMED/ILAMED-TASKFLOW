@@ -20,7 +20,7 @@ type InboxResponse = {
   notifications?: InboxNotification[];
 };
 
-export default function NotificationsInbox() {
+export default function NotificationsInbox({ sidebar = false }: { sidebar?: boolean } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<InboxNotification[]>([]);
@@ -45,8 +45,10 @@ export default function NotificationsInbox() {
 
   useEffect(() => {
     void refresh();
+    const updated = () => void refresh();
+    window.addEventListener("workspace:notifications-updated", updated);
     const timer = window.setInterval(() => void refresh(), 30_000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearInterval(timer); window.removeEventListener("workspace:notifications-updated", updated); };
   }, [refresh]);
 
   async function markRead(notificationId?: string) {
@@ -75,6 +77,7 @@ export default function NotificationsInbox() {
         setNotifications((current) => current.map((notification) => ({ ...notification, readAt })));
         setUnreadCount(0);
       }
+      window.dispatchEvent(new Event("workspace:notifications-updated"));
       return true;
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Unable to update notifications.");
@@ -100,18 +103,19 @@ export default function NotificationsInbox() {
           setOpen((value) => !value);
           if (!open) void refresh();
         }}
-        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-indigo-200 hover:text-indigo-700"
+        className={sidebar ? "workspace-nav-item w-full text-left" : "workspace-notification-button"}
       >
         <Bell aria-hidden="true" size={18} strokeWidth={1.7} />
+        {sidebar ? <span className="flex-1">Notifications</span> : null}
         {unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-bold text-white">
+          <span className={sidebar ? "workspace-nav-badge" : "workspace-notification-badge"}>
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+        <div className={`${sidebar ? "fixed left-4 top-20" : "absolute right-0 top-12"} z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10`}>
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Notifications</h2>
