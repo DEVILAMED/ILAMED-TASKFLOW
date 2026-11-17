@@ -34,12 +34,12 @@ export default async function EmployeesPage() {
         return <Link key={employee.id} href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="workspace-surface workspace-team-card"><div className="workspace-team-person"><span className="workspace-team-avatar">{name.split(/\s+/).map(part=>part[0]).slice(0,2).join("").toUpperCase()}</span><div><h2>{name}</h2><p>{employee.employeeProfile?.designation || (employee.role === "MANAGER" ? "Team manager" : "Team member")}</p></div><span className={`workspace-score-badge ${score !== null && score >= 70 ? "is-good" : ""}`} title="Average manager review rating converted to 100">{score === null ? "Not rated" : `${score} · ${score>=70?"Good":"Needs review"}`}</span></div><div className="workspace-team-counts">{[[assigned.length,"Tasks"],[done,"Done"],[pending,"Pending"],["—","Logged"]].map(([value,label])=><div key={String(label)}><strong>{value}</strong><span>{label}</span></div>)}</div></Link>;
       })}</section>{!users.length ? <div className="workspace-empty-panel">No employees have joined yet.</div> : null}
     </div>
-    <details className="workspace-additional"><summary>Manage employee accounts</summary><div className="mb-4 mt-4"><Link href="/departments" className="secondary-button workspace-standard-button">Manage departments</Link></div>
+    <details className="workspace-additional" open><summary>Manage employee accounts</summary><div className="mb-4 mt-4"><Link href="/departments" className="secondary-button workspace-standard-button">Manage departments</Link></div>
         <section id="employees" className="panel-card rounded-3xl p-5 sm:p-7">
           <div className="mb-4">
             <p className="section-kicker">People</p>
             <h2 className="mt-2 text-xl font-semibold text-white/90">Employees</h2>
-            <p className="mt-1 text-sm text-white/45">Employee accounts can view their assigned tasks and update progress.</p>
+            <p className="mt-1 text-sm text-white/45">Edit employee names, sign-in emails, and passwords, or manage roles, login access, and employee profiles.</p>
           </div>
           {users.length ? (
             <EmployeePresence

@@ -50,6 +50,8 @@ npx prisma generate
 
 The login and registration forms do not expose administrator setup. To create the first administrator, bootstrap the account through your deployment process using `ADMIN_EMAIL` and a long random `ADMIN_BOOTSTRAP_TOKEN` configured in `.env`; keep the token private and remove it from the environment after setup. Once an administrator exists, admins can manage employee access from the **Employees** section and assign tasks to non-admin accounts.
 
+Administrators can edit employee and manager accounts under **Team → Manage employee accounts → Edit account**. They can update names and sign-in emails or set a new password; leaving the password blank preserves it. Email and password changes revoke that user's existing sessions. The endpoint remains restricted to administrators and preserves protections for administrator accounts. Duplicate emails and invalid details are rejected. These changes use the existing schema and require no database migration.
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hashPassword } from "@/lib/password";
+import { parseAccountUpdate, updateManagedAccount } from "@/lib/user-accounts";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -29,18 +31,48 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: "You cannot change your own administrator account." }, { status: 400 });
   }
 
-  let payload: { role?: unknown; isBlocked?: unknown };
+  let payload: Record<string, unknown>;
   try {
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
     }
-    payload = body as { role?: unknown; isBlocked?: unknown };
+    payload = body as Record<string, unknown>;
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
   }
 
-  if ("isBlocked" in (payload ?? {})) {
+  if (["name", "email", "password"].some((key) => key in payload)) {
+    const parsed = parseAccountUpdate(payload);
+    if (!parsed.ok) {
+      return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
+    }
+    const { password, ...details } = parsed.data;
+    const passwordHash = password !== undefined ? await hashPassword(password) : undefined;
+    try {
+      const result = await prisma.$transaction(
+        (transaction) => updateManagedAccount(transaction, actor, id, { ...details, passwordHash }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      const { status, ...body } = result;
+      return NextResponse.json(body, { status });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2002") {
+          return NextResponse.json({ ok: false, error: "That email address is already in use." }, { status: 409 });
+        }
+        if (error.code === "P2025") {
+          return NextResponse.json({ ok: false, error: "Employee account not found." }, { status: 404 });
+        }
+        if (error.code === "P2034") {
+          return NextResponse.json({ ok: false, error: "This account was updated by someone else. Please try again." }, { status: 409 });
+        }
+      }
+      throw error;
+    }
+  }
+
+  if ("isBlocked" in payload) {
     const isBlocked = payload?.isBlocked;
     if (Object.keys(payload ?? {}).length !== 1 || typeof isBlocked !== "boolean") {
       return NextResponse.json({ ok: false, error: "Choose whether to block or restore this account." }, { status: 400 });

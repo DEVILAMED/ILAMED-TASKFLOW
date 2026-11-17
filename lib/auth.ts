@@ -4,6 +4,8 @@ import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConnectionError } from "@/lib/database-errors";
 
+export { isValidEmail, isStrongPassword } from "@/lib/user-accounts";
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -23,23 +25,6 @@ function hashToken(token: string): string {
 
 function sessionExpiresAt(): Date {
   return new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
-}
-
-export function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-export function isStrongPassword(value: string): boolean {
-  if (value.length < 12) {
-    return false;
-  }
-
-  const hasUppercase = /[A-Z]/.test(value);
-  const hasLowercase = /[a-z]/.test(value);
-  const hasDigit = /\d/.test(value);
-  const hasSymbol = /[^A-Za-z0-9]/.test(value);
-
-  return hasUppercase && hasLowercase && hasDigit && hasSymbol;
 }
 
 export function getClientIpAddress(headers: Headers): string {

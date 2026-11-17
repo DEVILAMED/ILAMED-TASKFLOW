@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserRoleControl from "./user-role-control";
+import EmployeeAccountEditor from "./employee-account-editor";
 
 type Employee = {
   id: string;
@@ -105,13 +106,16 @@ export default function EmployeePresence({ employees: initialEmployees, departme
                 <span className="text-white/35">{formatLastSeen(lastSeenAt, now)}</span>
               </p>
             </div>
-            <UserRoleControl
-              userId={employee.id}
-              role={employee.role}
-              isBlocked={employee.isBlocked}
-              displayName={employee.name || employee.email}
-              isCurrentUser={false}
-            />
+            <div className="flex flex-wrap items-center gap-4">
+              <EmployeeAccountEditor account={employee} onSaved={() => router.refresh()} />
+              <UserRoleControl
+                userId={employee.id}
+                role={employee.role}
+                isBlocked={employee.isBlocked}
+                displayName={employee.name || employee.email}
+                isCurrentUser={false}
+              />
+            </div>
             </div>
             <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} departments={departments} managers={managers} onSaved={() => router.refresh()} />
           </div>
