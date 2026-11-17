@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Deploy to a VPS with Coolify
+
+Use the included `Dockerfile` and follow the [Coolify deployment guide](docs/deploy-coolify.md)
+to create PostgreSQL, configure runtime variables, connect a domain, and create
+the first administrator. The container applies pending Prisma migrations before
+starting Next.js on port 3000.
+
 ## Getting Started
 
 First, run the development server:
@@ -20,7 +27,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 ## Environment and roles
 
-Copy `.env.example` to `.env` and set your PostgreSQL and Upstash credentials. PostgreSQL connections are allowed up to 15 seconds to establish; override `PG_CONNECTION_TIMEOUT_MS` if your database needs a different connection timeout. `PG_POOL_MAX` defaults to one connection per app process to limit pressure on providers using session-mode connection pools. Only increase it if the database pool has room for the combined connections from every app process or instance. Apply database changes and generate the Prisma client before starting the app:
+Copy `.env.example` to `.env` and set your PostgreSQL credentials. PostgreSQL connections are allowed up to 15 seconds to establish; override `PG_CONNECTION_TIMEOUT_MS` if your database needs a different connection timeout. `PG_POOL_MAX` defaults to one connection per app process to limit pressure on providers using session-mode connection pools. Only increase it if the database pool has room for the combined connections from every app process or instance. Apply database changes and generate the Prisma client before starting the app:
 
 ```bash
 npx prisma migrate deploy
