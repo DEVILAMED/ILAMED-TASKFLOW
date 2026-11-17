@@ -2,11 +2,13 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import SubmissionImageGallery from "@/app/submission-image-gallery";
+import type { SubmissionImage } from "@/lib/submission-images";
 
 type ReviewTask = {
   id: string; title: string; description: string | null; dueDate: string | null;
   assignee: { name: string | null; email: string } | null;
-  submission: { id: string; notes: string | null; createdAt: string; submitter: string } | null;
+  submission: { id: string; notes: string | null; createdAt: string; submitter: string; images: SubmissionImage[] } | null;
 };
 
 export default function ReviewQueue() {
@@ -67,6 +69,7 @@ export default function ReviewQueue() {
       </div>
       {task.description ? <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{task.description}</p> : null}
       {task.submission?.notes ? <p className="mt-3 rounded-xl bg-white/[0.04] p-3 text-sm text-white/65">{task.submission.notes}</p> : null}
+      {task.submission ? <SubmissionImageGallery images={task.submission.images} /> : null}
       <div className="mt-4 grid gap-3 sm:grid-cols-[120px_1fr]">
         <label className="grid gap-1 text-xs text-white/50">Quality rating<select className="soft-input h-10 rounded-lg px-2" value={ratings[task.id] ?? "5"} onChange={(event) => setRatings((current) => ({ ...current, [task.id]: event.target.value }))}>{[1,2,3,4,5].map((score) => <option key={score} value={score}>{score} / 5</option>)}</select></label>
         <label className="grid gap-1 text-xs text-white/50">Feedback<textarea className="soft-input min-h-10 rounded-lg px-3 py-2 text-sm" maxLength={2000} value={feedback[task.id] ?? ""} onChange={(event) => setFeedback((current) => ({ ...current, [task.id]: event.target.value }))} placeholder="Add feedback for the employee" /></label>

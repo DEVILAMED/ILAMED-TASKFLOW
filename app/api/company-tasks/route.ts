@@ -3,6 +3,7 @@ import { TaskStatus, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID, ensureCompanyTaskProject } from "@/services/company-tasks";
+import { parseCompanyTaskDetails, validateCompanyTaskDateRange } from "@/lib/company-task-management";
 
 const taskSelect = {
   id: true,
@@ -10,6 +11,7 @@ const taskSelect = {
   description: true,
   status: true,
   priority: true,
+  startDate: true,
   dueDate: true,
   createdAt: true,
   updatedAt: true,
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
     title?: unknown;
     description?: unknown;
     assigneeId?: unknown;
+    startDate?: unknown;
     dueDate?: unknown;
     priority?: unknown;
     checklistItems?: unknown;
@@ -90,16 +93,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Choose a valid task priority." }, { status: 400 });
   }
 
-  let dueDate: Date | null = null;
-  if (payload?.dueDate !== undefined && payload.dueDate !== null && payload.dueDate !== "") {
-    if (typeof payload.dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)) {
-      return NextResponse.json({ ok: false, error: "Enter a valid due date." }, { status: 400 });
-    }
-    dueDate = new Date(`${payload.dueDate}T00:00:00.000Z`);
-    if (Number.isNaN(dueDate.getTime()) || dueDate.toISOString().slice(0, 10) !== payload.dueDate) {
-      return NextResponse.json({ ok: false, error: "Enter a valid due date." }, { status: 400 });
-    }
-  }
+  const details = parseCompanyTaskDetails(payload ?? {});
+  if (!details.ok) return NextResponse.json({ ok: false, error: details.error }, { status: 400 });
+  const { startDate, dueDate } = details.data;
+  const rangeError = validateCompanyTaskDateRange(startDate, dueDate);
+  if (rangeError) return NextResponse.json({ ok: false, error: rangeError }, { status: 400 });
 
   const managerTeams = user.role === UserRole.MANAGER
     ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })
@@ -124,6 +122,7 @@ export async function POST(request: Request) {
         issueType: "TASK",
         status: TaskStatus.TODO,
         priority: priority as "LOW" | "MEDIUM" | "HIGH",
+        startDate,
         dueDate,
         projectId: project.id,
         assigneeId: assignee.id,

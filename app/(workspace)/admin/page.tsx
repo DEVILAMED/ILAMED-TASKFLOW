@@ -22,6 +22,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         description: true,
         status: true,
         priority: true,
+        startDate: true,
         dueDate: true,
         createdAt: true,
         updatedAt: true,
@@ -36,6 +37,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   ]);
   return <>
     <WorkspacePageHeading kicker={calendar ? "SCHEDULE" : "WORKFLOW"} title={calendar ? "Calendar" : "Tasks"} action={<NewTaskButton />} />
-    <CompanyTaskBoard isAdmin employees={employees} initialTasks={tasks.map((task) => ({ ...task, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
+    <CompanyTaskBoard isAdmin employees={employees} initialTasks={tasks.map((task) => ({ ...task, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
   </>;
 }

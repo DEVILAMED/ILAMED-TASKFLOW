@@ -13,7 +13,7 @@ export default function HomeAuthPanel() {
 
   return (
     <section className="panel-card w-full rounded-[30px] p-6 sm:p-8" aria-labelledby="home-auth-title">
-      <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Account access">
+      <div className="grid grid-cols-2 rounded-xl border border-[var(--stroke)] bg-[var(--panel-soft)] p-1" role="tablist" aria-label="Account access">
         <button
           type="button"
           role="tab"
@@ -21,7 +21,7 @@ export default function HomeAuthPanel() {
           aria-controls="home-auth-panel"
           onClick={() => setMode("login")}
           className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
-            isLogin ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+            isLogin ? "bg-[var(--panel-strong)] text-[var(--accent)] shadow-sm ring-1 ring-[var(--stroke)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
           Sign in
@@ -33,7 +33,7 @@ export default function HomeAuthPanel() {
           aria-controls="home-auth-panel"
           onClick={() => setMode("register")}
           className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
-            !isLogin ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+            !isLogin ? "bg-[var(--panel-strong)] text-[var(--accent)] shadow-sm ring-1 ring-[var(--stroke)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
           Create account

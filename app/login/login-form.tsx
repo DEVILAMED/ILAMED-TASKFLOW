@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import PasswordInput from "@/app/password-input";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -59,18 +60,17 @@ export default function LoginForm() {
         />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium text-white/48">
-        Password
-        <input
-          className="soft-input h-12 rounded-2xl px-4 text-sm"
+      <div className="grid gap-2 text-sm font-medium text-white/48">
+        <label htmlFor="login-password">Password</label>
+        <PasswordInput
+          id="login-password"
           name="password"
-          type="password"
           placeholder="********"
           required
           minLength={12}
           autoComplete="current-password"
         />
-      </label>
+      </div>
 
       {error ? (
         <p className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">

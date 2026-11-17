@@ -13,7 +13,6 @@ export async function GET() {
   }
 
   const employees = await prisma.user.findMany({
-    where: { role: { not: UserRole.ADMIN } },
     select: { id: true, lastSeenAt: true },
   });
 

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import PasswordInput from "@/app/password-input";
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -54,7 +55,7 @@ export default function RegisterForm() {
           className="soft-input h-12 rounded-2xl px-4 text-sm"
           name="name"
           type="text"
-          placeholder="Avery Lane"
+          placeholder="Full Name"
           autoComplete="name"
           minLength={2}
           required
@@ -73,21 +74,16 @@ export default function RegisterForm() {
         />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium text-white/48">
-        Password
-        <input
-          className="soft-input h-12 rounded-2xl px-4 text-sm"
+      <div className="grid gap-2 text-sm font-medium text-white/48">
+        <label htmlFor="register-password">Password</label>
+        <PasswordInput
+          id="register-password"
           name="password"
-          type="password"
           placeholder="12+ characters, strong password"
           required
           minLength={12}
           autoComplete="new-password"
         />
-      </label>
-
-      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-xs leading-6 text-white/34">
-        Once your account is ready, an administrator can assign tasks to you.
       </div>
 
       {error ? (

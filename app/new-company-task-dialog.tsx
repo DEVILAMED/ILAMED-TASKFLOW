@@ -18,6 +18,8 @@ export default function NewCompanyTaskDialog({ employees }: { employees: Employe
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     const show = () => { setError(null); if (!dialog.current?.open) dialog.current?.showModal(); setOpen(true); };
@@ -49,12 +51,12 @@ export default function NewCompanyTaskDialog({ employees }: { employees: Employe
     setSaving(true); setError(null);
     try {
       const response = await fetch("/api/company-tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        title: values.get("title"), description: values.get("description"), assigneeId: values.get("assigneeId"), priority: values.get("priority"), dueDate: values.get("dueDate") || null,
+        title: values.get("title"), description: values.get("description"), assigneeId: values.get("assigneeId"), priority: values.get("priority"), startDate, dueDate: endDate,
         checklistItems: String(values.get("checklist") || "").split(/\r?\n/).map(item => item.trim()).filter(Boolean),
       }) });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Unable to create this task.");
-      dialog.current?.close(); form.current?.reset(); router.refresh();
+      dialog.current?.close(); form.current?.reset(); setStartDate(""); setEndDate(""); router.refresh();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create this task. Please try again."); }
     finally { setSaving(false); }
   }
@@ -66,7 +68,11 @@ export default function NewCompanyTaskDialog({ employees }: { employees: Employe
       <label className="workspace-field field-wide">Description<textarea name="description" maxLength={2000} rows={3} placeholder="Scope, deliverables, references…" /></label>
       <label className="workspace-field">Assign to *<select name="assigneeId" required defaultValue=""><option value="" disabled>Choose a team member</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select></label>
       <label className="workspace-field">Priority<select name="priority" defaultValue="MEDIUM"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
-      <label className="workspace-field">Deadline<input name="dueDate" type="date" /></label>
+      <fieldset className="field-wide grid gap-3 sm:grid-cols-2">
+        <legend className="mb-2 text-sm font-medium">Task date range</legend>
+        <label className="workspace-field">Start date *<input name="startDate" type="date" required value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} disabled={saving} /></label>
+        <label className="workspace-field">End date *<input name="dueDate" type="date" required value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} disabled={saving} /></label>
+      </fieldset>
       <label className="workspace-field field-wide">Checklist<textarea name="checklist" rows={3} maxLength={4200} placeholder="One step per line" /><span className="workspace-field-hint">Up to 20 steps. Submitted work goes to the review queue.</span></label>
       {!employees.length ? <p className="field-wide text-sm text-[var(--muted)]">No eligible employees are available to assign work to.</p> : null}
       {error ? <p role="alert" className="field-wide workspace-form-error">{error}</p> : null}

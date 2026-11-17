@@ -134,6 +134,19 @@ run before startup each time. For rolling updates, keep schema changes compatibl
 with the previous app version until its container has stopped. Database changes
 are not reverted by an application image rollback.
 
+## Task completion images
+
+The `20261117133000_add_task_submission_images` migration adds optional private
+images to task submissions. The Dockerfile applies it automatically on startup.
+Employees can attach up to five JPEG, PNG, or WebP images, 5 MB each. The app
+re-encodes and resizes images before storing them in PostgreSQL, so no upload
+directory, persistent app volume, or additional storage credentials are required.
+Include the image table in database backups and monitor database disk usage.
+
+If you configure an additional proxy or CDN with a request-body limit, allow
+at least 26 MiB for this app's multipart task submissions. The application enforces
+its own upload and per-image limits.
+
 ## References
 
 - [Coolify Dockerfile deployments](https://coolify.io/docs/applications/builds/dockerfile)

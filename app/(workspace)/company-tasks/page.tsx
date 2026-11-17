@@ -14,7 +14,7 @@ export default async function CompanyTasksPage({ searchParams }: { searchParams:
     <WorkspacePageHeading kicker={calendar ? "TIMELINE" : "WORKFLOW"} title={calendar ? "Calendar" : "Tasks"} />
     <CompanyTaskBoard isAdmin={false} employees={[]}
       initialFeedback={feedback.map(review => ({ id: review.id, taskId: review.submission.task.id, feedback: review.feedback, rating: review.rating, reviewer: review.reviewer.name || review.reviewer.email }))}
-      initialTasks={tasks.map(task => ({ ...task, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))}
+      initialTasks={tasks.map(task => ({ ...task, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))}
     />
   </div>;
 }

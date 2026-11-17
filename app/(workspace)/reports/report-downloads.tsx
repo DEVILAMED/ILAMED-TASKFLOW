@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
 
-export type ReportTask = { title: string; assignee: string; status: string; priority: string; deadline: string; createdAt: string };
+export type ReportTask = { title: string; assignee: string; status: string; priority: string; startDate: string; deadline: string; createdAt: string };
 const closed = (status: string) => ["APPROVED","DONE"].includes(status);
 const creationDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
 const escapeHtml = (value: unknown) => String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -15,7 +15,7 @@ export default function ReportDownloads({ tasks }: { tasks: ReportTask[] }) {
   const invalid = Boolean(from && to && from > to);
   const filtered = tasks.filter(task => { const day = creationDay.format(new Date(task.createdAt)); return (!from || day >= from) && (!to || day <= to); });
   function rows(performance: boolean): string[][] {
-    if (!performance) return [["Task","Assignee","Status","Priority","Deadline"],...filtered.map(task=>[task.title,task.assignee,task.status.replaceAll("_"," "),task.priority,task.deadline])];
+    if (!performance) return [["Task","Assignee","Status","Priority","Start date","End date"],...filtered.map(task=>[task.title,task.assignee,task.status.replaceAll("_"," "),task.priority,task.startDate,task.deadline])];
     const people = new Map<string,{total:number; completed:number; pending:number}>();
     for (const task of filtered) { const person = people.get(task.assignee) || {total:0,completed:0,pending:0}; person.total++; if(closed(task.status))person.completed++;else if(!["CANCELLED","REJECTED"].includes(task.status))person.pending++;people.set(task.assignee,person); }
     return [["Employee","Assigned","Completed","Pending","Completion rate"],...[...people.entries()].map(([name,person])=>[name,String(person.total),String(person.completed),String(person.pending),`${Math.round(person.completed/person.total*100)}%`])];
@@ -37,6 +37,6 @@ export default function ReportDownloads({ tasks }: { tasks: ReportTask[] }) {
   return <div className="workspace-view">
     <WorkspacePageHeading kicker="ANALYTICS" title="Reports" description="Download Excel-compatible CSV or PDF versions of operational reports." />
     <section className="workspace-surface"><h2>Date Range</h2><div className="workspace-report-dates"><label className="workspace-field">From<input type="date" value={from} max={to || undefined} onChange={event=>setFrom(event.target.value)} /></label><label className="workspace-field">To<input type="date" value={to} min={from || undefined} onChange={event=>setTo(event.target.value)} /></label></div><p className="workspace-field-hint">{invalid ? "The end date must be on or after the start date." : `${filtered.length} tasks · Filtered by creation date`}</p></section>
-    <section className="workspace-report-cards">{[false,true].map(performance=><article className="workspace-surface workspace-export-card" key={String(performance)}><span className="workspace-export-icon"><Download size={20}/></span><div><h2>{performance?"Performance Report":"Task Report"}</h2><p>{performance?"Employee task totals and completion rates.":"Every task with status, priority, assignee, and deadline."}</p><div className="workspace-export-actions"><button type="button" className="export-excel" disabled={invalid} onClick={()=>excel(performance)}><FileSpreadsheet size={15}/>Excel CSV</button><button type="button" className="export-pdf" disabled={invalid} onClick={()=>pdf(performance)}><FileText size={15}/>PDF</button></div></div></article>)}</section>
+    <section className="workspace-report-cards">{[false,true].map(performance=><article className="workspace-surface workspace-export-card" key={String(performance)}><span className="workspace-export-icon"><Download size={20}/></span><div><h2>{performance?"Performance Report":"Task Report"}</h2><p>{performance?"Employee task totals and completion rates.":"Every task with status, priority, assignee, start date, and end date."}</p><div className="workspace-export-actions"><button type="button" className="export-excel" disabled={invalid} onClick={()=>excel(performance)}><FileSpreadsheet size={15}/>Excel CSV</button><button type="button" className="export-pdf" disabled={invalid} onClick={()=>pdf(performance)}><FileText size={15}/>PDF</button></div></div></article>)}</section>
   </div>;
 }

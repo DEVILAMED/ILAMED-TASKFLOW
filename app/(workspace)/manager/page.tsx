@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import TeamTaskControls from "./team-task-controls";
 import QuickAssign from "./quick-assign";
+import { formatTaskDateRange } from "@/lib/task-dates";
 
 export default async function ManagerDashboard() {
   const user = await getCurrentUser();
@@ -18,7 +19,7 @@ export default async function ManagerDashboard() {
   const employeeIds = [...new Set([...memberIds, user.id])];
   const [employees, tasks] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: memberIds }, role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } }),
-    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, description: true, status: true, priority: true, dueDate: true, assigneeId: true, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: { name: true, email: true } } } }),
+    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: { name: true, email: true } } } }),
   ]);
   const today = new Date().toISOString().slice(0, 10);
   const terminal = (status: string) => ["APPROVED", "DONE", "CANCELLED", "REJECTED"].includes(status);
@@ -38,8 +39,8 @@ export default async function ManagerDashboard() {
         <QuickAssign employees={employees} />
       </section>
       <TeamTaskControls tasks={tasks.filter((task) => task.assigneeId !== user.id)} />
-      <section className="panel-card rounded-2xl p-5"><div className="flex items-center justify-between"><div><p className="section-kicker">Deadlines</p><h2 className="mt-1 text-base font-semibold text-[var(--foreground)]">Upcoming team work</h2></div><Link href="/company-tasks" className="text-xs font-medium text-[var(--accent)]">View my tasks</Link></div>
-        {dueSoon.length ? <div className="mt-3 divide-y divide-[var(--stroke)]">{dueSoon.map((task) => <div key={task.id} className="flex flex-wrap justify-between gap-3 py-3"><div><p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{task.assignee?.name || task.assignee?.email} · {task.status.replaceAll("_", " ").toLowerCase()}</p></div><time className="text-xs text-[var(--muted)]">{task.dueDate?.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</time></div>)}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No upcoming deadlines in your teams.</p>}
+      <section className="panel-card rounded-2xl p-5"><div className="flex items-center justify-between"><div><p className="section-kicker">Schedule</p><h2 className="mt-1 text-base font-semibold text-[var(--foreground)]">Upcoming team work</h2></div><Link href="/company-tasks" className="text-xs font-medium text-[var(--accent)]">View my tasks</Link></div>
+        {dueSoon.length ? <div className="mt-3 divide-y divide-[var(--stroke)]">{dueSoon.map((task) => <div key={task.id} className="flex flex-wrap justify-between gap-3 py-3"><div><p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{task.assignee?.name || task.assignee?.email} · {task.status.replaceAll("_", " ").toLowerCase()}</p></div><time className="text-xs text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</time></div>)}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No upcoming scheduled work in your teams.</p>}
       </section>
     </div>
   </>;

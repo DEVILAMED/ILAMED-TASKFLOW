@@ -5,7 +5,7 @@ export async function getEmployeeWorkspaceData(userId: string) {
   const where = { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: userId };
   const [tasks, feedback, profile] = await Promise.all([
     prisma.task.findMany({ where, select: {
-      id: true, title: true, description: true, status: true, priority: true, dueDate: true, createdAt: true, updatedAt: true,
+      id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, createdAt: true, updatedAt: true,
       assignee: { select: { id: true, name: true, email: true } },
       checklistItems: { orderBy: { position: "asc" }, select: { id: true, title: true, isCompleted: true, position: true } },
     }, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }] }),

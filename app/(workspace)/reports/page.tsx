@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import ReportDownloads from "./report-downloads";
+import { formatTaskDateRange } from "@/lib/task-dates";
 
 const STATUS_ROWS = [
   { key: "TODO", label: "Not started", color: "bg-slate-400" },
@@ -69,6 +70,7 @@ export default async function ReportsPage() {
       status: true,
       priority: true,
       createdAt: true,
+      startDate: true,
       dueDate: true,
       assignee: { select: { id: true, name: true, email: true } },
     },
@@ -127,7 +129,7 @@ export default async function ReportsPage() {
 
   return (
     <>
-      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), status: task.status, priority: task.priority, deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", createdAt: task.createdAt.toISOString() }))} />
+      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), status: task.status, priority: task.priority, startDate: task.startDate ? formatDueDate(task.startDate) : "Not set", deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", createdAt: task.createdAt.toISOString() }))} />
       <details className="workspace-additional"><summary>View all-time task analytics</summary>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <section className="panel-card rounded-3xl p-5 sm:p-7">
@@ -284,9 +286,9 @@ export default async function ReportsPage() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className={`text-xs font-medium ${isOverdue ? "text-rose-300" : "text-white/60"}`}>
-                          {isOverdue ? "Overdue" : formatDueDate(task.dueDate!)}
+                          {isOverdue ? "Overdue" : formatTaskDateRange(task.startDate, task.dueDate)}
                         </p>
-                        {isOverdue ? <p className="mt-1 text-[11px] text-white/35">{formatDueDate(task.dueDate!)}</p> : null}
+                        {isOverdue ? <p className="mt-1 text-[11px] text-white/35">{formatTaskDateRange(task.startDate, task.dueDate)}</p> : null}
                       </div>
                     </li>
                   );

@@ -4,6 +4,7 @@ import "./overview.css";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
+import { formatTaskDateRange } from "@/lib/task-dates";
 
 export default async function AdminOverviewPage() {
   const currentUser = await getCurrentUser();
@@ -29,6 +30,7 @@ export default async function AdminOverviewPage() {
         description: true,
         status: true,
         priority: true,
+        startDate: true,
         dueDate: true,
         createdAt: true,
         updatedAt: true,
@@ -130,8 +132,8 @@ export default async function AdminOverviewPage() {
           <div className="panel-card rounded-3xl p-5 sm:p-6"><p className="section-kicker">By department</p><h2 className="mt-2 text-lg font-semibold text-white/90">Task completion</h2>
             {departmentStats.length ? <div className="mt-4 grid gap-4">{departmentStats.map((department) => <div key={department.id}><div className="flex justify-between gap-3 text-xs"><span className="text-white/70">{department.name}</span><span className="text-white/40">{department.completed}/{department.taskCount} approved</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${department.completion ?? 0}%` }} /></div></div>)}</div> : <p className="mt-3 text-sm text-white/40">Create departments and assign employee profiles to compare teams.</p>}
           </div>
-          <div className="panel-card rounded-3xl p-5 sm:p-6"><p className="section-kicker">Deadlines</p><h2 className="mt-2 text-lg font-semibold text-white/90">Upcoming work</h2>
-            {upcomingTasks.length ? <div className="mt-3 divide-y divide-white/[0.07]">{upcomingTasks.map((task) => <div key={task.id} className="flex justify-between gap-3 py-3"><div className="min-w-0"><p className="truncate text-sm text-white/75">{task.title}</p><p className="mt-1 text-xs text-white/40">{task.assignee?.name || task.assignee?.email || "Unassigned"}</p></div><time className="shrink-0 text-xs text-white/45">{task.dueDate?.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</time></div>)}</div> : <p className="mt-3 text-sm text-white/40">No upcoming deadlines.</p>}
+          <div className="panel-card rounded-3xl p-5 sm:p-6"><p className="section-kicker">Schedule</p><h2 className="mt-2 text-lg font-semibold text-white/90">Upcoming work</h2>
+            {upcomingTasks.length ? <div className="mt-3 divide-y divide-white/[0.07]">{upcomingTasks.map((task) => <div key={task.id} className="flex justify-between gap-3 py-3"><div className="min-w-0"><p className="truncate text-sm text-white/75">{task.title}</p><p className="mt-1 text-xs text-white/40">{task.assignee?.name || task.assignee?.email || "Unassigned"}</p></div><time className="shrink-0 text-xs text-white/45">{formatTaskDateRange(task.startDate, task.dueDate)}</time></div>)}</div> : <p className="mt-3 text-sm text-white/40">No upcoming scheduled work.</p>}
           </div>
         </section>
       <section className="grid gap-5 lg:grid-cols-2">

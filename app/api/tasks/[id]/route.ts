@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { accessibleTaskWhere } from "@/project-access";
 import { canManageProject, canManageProjectTasks } from "@/lib/project-task-permissions";
 import { recordActiveSprintProgress } from "@/services/sprint-progress";
+import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import {
   buildTaskNotifications,
   getTaskNotificationRecipientIds,
@@ -137,6 +138,13 @@ export async function PATCH(
     return NextResponse.json(
       { ok: false, error: "Task not found." },
       { status: 404 },
+    );
+  }
+
+  if (task.projectId === COMPANY_TASK_PROJECT_ID && user.role !== "ADMIN") {
+    return NextResponse.json(
+      { ok: false, error: "Only administrators can edit company task details. Use the company task workflow for progress updates." },
+      { status: 403 },
     );
   }
 
@@ -457,6 +465,13 @@ export async function DELETE(
     return NextResponse.json(
       { ok: false, error: "Task not found." },
       { status: 404 },
+    );
+  }
+
+  if (task.projectId === COMPANY_TASK_PROJECT_ID && user.role !== "ADMIN") {
+    return NextResponse.json(
+      { ok: false, error: "Only administrators can delete company tasks." },
+      { status: 403 },
     );
   }
 

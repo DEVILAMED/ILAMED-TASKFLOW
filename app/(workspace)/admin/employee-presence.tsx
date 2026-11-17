@@ -26,6 +26,7 @@ type PresenceSnapshot = {
 };
 
 const ONLINE_WINDOW_MS = 90_000;
+const roleLabels: Record<Employee["role"], string> = { ADMIN: "Administrator", MANAGER: "Manager", USER: "Employee" };
 
 function formatLastSeen(value: string | null, now: number) {
   if (!value) return "No recent activity";
@@ -39,7 +40,7 @@ function formatLastSeen(value: string | null, now: number) {
   return `Last active ${new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-export default function EmployeePresence({ employees: initialEmployees, departments, managers }: { employees: Employee[]; departments: DepartmentOption[]; managers: ManagerOption[] }) {
+export default function EmployeePresence({ employees: initialEmployees, currentUserId, departments, managers }: { employees: Employee[]; currentUserId: string; departments: DepartmentOption[]; managers: ManagerOption[] }) {
   const router = useRouter();
   const [lastSeenById, setLastSeenById] = useState<Record<string, string | null>>(
     () => Object.fromEntries(initialEmployees.map((employee) => [employee.id, employee.lastSeenAt])),
@@ -47,15 +48,18 @@ export default function EmployeePresence({ employees: initialEmployees, departme
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<Employee["role"] | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const filteredEmployees = initialEmployees.filter((employee) => {
     const query = search.trim().toLocaleLowerCase();
-    return !query || [employee.name, employee.email, employee.profile?.employeeCode, employee.profile?.designation]
-      .some((value) => value?.toLocaleLowerCase().includes(query));
+    return (roleFilter === "ALL" || employee.role === roleFilter)
+      && (!query || [employee.name, employee.email, roleLabels[employee.role], employee.profile?.employeeCode, employee.profile?.designation]
+        .some((value) => value?.toLocaleLowerCase().includes(query)));
   });
   const pageCount = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
-  const visibleEmployees = filteredEmployees.slice((page - 1) * pageSize, page * pageSize);
+  const currentPage = Math.min(page, pageCount);
+  const visibleEmployees = filteredEmployees.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const refreshPresence = useCallback(async () => {
     try {
@@ -86,8 +90,14 @@ export default function EmployeePresence({ employees: initialEmployees, departme
     <div className="divide-y divide-white/[0.08]">
       {error ? <p role="alert" className="mb-3 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{error} Showing the last known status.</p> : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, email, employee ID…" aria-label="Search employees" className="soft-input h-10 w-full max-w-md rounded-xl px-3 text-sm" />
-        <span className="text-xs text-white/40">{filteredEmployees.length} employees</span>
+        <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, email, employee ID…" aria-label="Search registered users" className="soft-input h-10 w-full max-w-md rounded-xl px-3 text-sm" />
+        <select aria-label="Filter users by role" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value as Employee["role"] | "ALL"); setPage(1); }} className="soft-input h-10 rounded-xl px-3 text-sm">
+          <option value="ALL">All roles</option>
+          <option value="ADMIN">Administrators</option>
+          <option value="MANAGER">Managers</option>
+          <option value="USER">Employees</option>
+        </select>
+        <span className="text-xs text-white/40">{filteredEmployees.length} of {initialEmployees.length} accounts</span>
       </div>
       {visibleEmployees.map((employee) => {
         const lastSeenAt = lastSeenById[employee.id] ?? null;
@@ -96,7 +106,11 @@ export default function EmployeePresence({ employees: initialEmployees, departme
           <div key={employee.id} className="border-b border-white/[0.08] py-3 last:border-0">
             <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-white/80">{employee.name || "Unnamed employee"}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-white/80">{employee.name || "Unnamed user"}</p>
+                <span className="badge-pill text-[10px]">{roleLabels[employee.role]}</span>
+                {employee.id === currentUserId ? <span className="text-xs font-medium text-[var(--accent)]">You</span> : null}
+              </div>
               <p className="mt-1 text-xs text-white/40">{employee.email}</p>
               <p className="mt-2 flex items-center gap-2 text-xs">
                 <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-slate-500"}`} />
@@ -106,22 +120,23 @@ export default function EmployeePresence({ employees: initialEmployees, departme
                 <span className="text-white/35">{formatLastSeen(lastSeenAt, now)}</span>
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
+            {employee.role !== "ADMIN" ? <div className="flex flex-wrap items-center gap-4">
               <EmployeeAccountEditor account={employee} onSaved={() => router.refresh()} />
               <UserRoleControl
                 userId={employee.id}
                 role={employee.role}
                 isBlocked={employee.isBlocked}
                 displayName={employee.name || employee.email}
-                isCurrentUser={false}
+                isCurrentUser={employee.id === currentUserId}
               />
+            </div> : null}
             </div>
-            </div>
-            <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} departments={departments} managers={managers} onSaved={() => router.refresh()} />
+            {employee.role !== "ADMIN" ? <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} departments={departments} managers={managers} onSaved={() => router.refresh()} /> : null}
           </div>
         );
       })}
-      {pageCount > 1 ? <div className="mt-3 flex items-center justify-between"><p className="text-xs text-white/40">Page {page} of {pageCount}</p><div className="flex gap-2"><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Previous</button><button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Next</button></div></div> : null}
+      {!filteredEmployees.length ? <p role="status" className="py-6 text-sm text-[var(--muted)]">No registered users match your search and role filter.</p> : null}
+      {pageCount > 1 ? <div className="mt-3 flex items-center justify-between"><p className="text-xs text-white/40">Page {currentPage} of {pageCount}</p><div className="flex gap-2"><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Previous</button><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Next</button></div></div> : null}
     </div>
   );
 }

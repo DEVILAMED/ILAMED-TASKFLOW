@@ -3,6 +3,12 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
 import EmployeeTaskCalendar from "@/app/employee-task-calendar";
+import TaskChecklistProgress from "@/app/task-checklist-progress";
+import { getChecklistProgress } from "@/lib/task-progress";
+import { formatTaskDateRange, taskIsScheduledOn, taskOverlapsDateRange } from "@/lib/task-dates";
+import CompanyTaskEditor, { type CompanyTaskChanges } from "@/app/company-task-editor";
+import SubmissionImagePicker from "@/app/submission-image-picker";
+import TaskSubmissionHistory from "@/app/task-submission-history";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
 type TaskAction = TaskStatus | "REPORT_BLOCKER";
@@ -17,12 +23,15 @@ type CompanyTask = {
   description: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  startDate: string | null;
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
   assignee: Employee | null;
   checklistItems: ChecklistItem[];
 };
+
+type TaskUpdateHandler = (task: CompanyTask, status: TaskAction, notes?: string, images?: File[]) => Promise<boolean>;
 
 const statusLabels: Record<TaskStatus, string> = {
   TODO: "Not started",
@@ -42,32 +51,8 @@ const priorityLabels: Record<TaskPriority, string> = {
   HIGH: "High",
 };
 
-function getTaskProgress(task: CompanyTask) {
-  if (!task.checklistItems.length) {
-    return {
-      percentage: 0,
-      valueText: "No checklist",
-      countText: null,
-    };
-  }
-
-  const completed = task.checklistItems.filter((item) => item.isCompleted).length;
-  const percentage = Math.round((completed / task.checklistItems.length) * 100);
-  return {
-    percentage,
-    valueText: `${completed} of ${task.checklistItems.length} steps complete`,
-    countText: `${completed}/${task.checklistItems.length} steps`,
-  };
-}
-
 function employeeLabel(employee: Employee | null) {
   return employee ? employee.name || employee.email : "Unassigned";
-}
-
-function formatDueDate(value: string | null) {
-  return value
-    ? new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
-    : "No due date";
 }
 
 export default function CompanyTaskBoard({
@@ -141,7 +126,7 @@ export default function CompanyTaskBoard({
       const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
       return formatter.format(new Date(task.createdAt)) === formatter.format(currentDate);
     }
-    if (value === "TODAY") return !closed && task.dueDate?.slice(0, 10) === today;
+    if (value === "TODAY") return !closed && taskIsScheduledOn(task, today);
     if (value === "OVERDUE") return !closed && !!task.dueDate && task.dueDate.slice(0, 10) < today;
     if (value === "REVISION") return task.status === "REVISION_REQUESTED";
     return true;
@@ -156,7 +141,7 @@ export default function CompanyTaskBoard({
       && (statusFilter === "ALL" || task.status === statusFilter)
       && (employeeFilter === "ALL" || (employeeFilter === "UNASSIGNED" ? !task.assignee : task.assignee?.id === employeeFilter))
       && (priorityFilter === "ALL" || task.priority === priorityFilter)
-      && (dueFilter === "ALL" || (dueFilter === "OVERDUE" ? overdue : dueFilter === "TODAY" ? task.dueDate?.slice(0, 10) === today : Boolean(task.dueDate)));
+      && (dueFilter === "ALL" || (dueFilter === "OVERDUE" ? overdue : dueFilter === "TODAY" ? taskIsScheduledOn(task, today) : Boolean(task.dueDate)));
   }).sort((a, b) => sort === "priority" ? (["HIGH", "MEDIUM", "LOW"].indexOf(a.priority) - ["HIGH", "MEDIUM", "LOW"].indexOf(b.priority)) : sort === "updated" ? b.updatedAt.localeCompare(a.updatedAt) : (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
 
   useEffect(() => {
@@ -210,6 +195,48 @@ export default function CompanyTaskBoard({
     } finally {
       setPendingId(null);
     }
+  }
+
+  async function editTask(task: CompanyTask, changes: CompanyTaskChanges) {
+    if (pendingId) return false;
+    setPendingId(task.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/company-tasks/${encodeURIComponent(task.id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),
+      });
+      const data = await response.json() as { ok?: boolean; task?: CompanyTask; error?: string };
+      if (!response.ok || !data.ok || !data.task) throw new Error(data.error || "Unable to edit this task.");
+      setTasks((current) => current.map((item) => item.id === task.id ? data.task! : item));
+      setNotice("Task changes saved.");
+      router.refresh();
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to edit this task. Check your connection and try again.");
+      return false;
+    } finally { setPendingId(null); }
+  }
+
+  async function deleteTask(task: CompanyTask) {
+    if (pendingId) return false;
+    setPendingId(task.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/company-tasks/${encodeURIComponent(task.id)}`, { method: "DELETE" });
+      const data = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) throw new Error(data.error || "Unable to delete this task.");
+      setExpandedTaskId(null);
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setComments((current) => { const next = { ...current }; delete next[task.id]; return next; });
+      setNotice(`Task deleted: ${task.title}.`);
+      router.refresh();
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to delete this task. Check your connection and try again.");
+      return false;
+    } finally { setPendingId(null); }
   }
 
   async function reassignTask(task: CompanyTask, nextAssigneeId: string) {
@@ -269,15 +296,23 @@ export default function CompanyTaskBoard({
     }
   }
 
-  async function updateStatus(task: CompanyTask, status: TaskAction, notes?: string) {
+  async function updateStatus(task: CompanyTask, status: TaskAction, notes?: string, images: File[] = []) {
+    if (pendingId) return false;
     setPendingId(task.id);
     setError(null);
     setNotice(null);
     try {
+      let form: FormData | undefined;
+      if (status === "SUBMITTED_FOR_REVIEW" && images.length) {
+        form = new FormData();
+        form.set("status", status);
+        if (notes) form.set("notes", notes);
+        for (const image of images) form.append("images", image);
+      }
       const response = await fetch(`/api/company-tasks/${task.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...(status === "REPORT_BLOCKER" ? { action: status } : { status }), ...(notes ? { notes } : {}) }),
+        ...(form ? {} : { headers: { "Content-Type": "application/json" } }),
+        body: form ?? JSON.stringify({ ...(status === "REPORT_BLOCKER" ? { action: status } : { status }), ...(notes ? { notes } : {}) }),
       });
       const data = await response.json() as { ok?: boolean; task?: CompanyTask; error?: string };
       if (!response.ok || !data.ok || !data.task) {
@@ -336,9 +371,9 @@ export default function CompanyTaskBoard({
         {isAdmin ? <select aria-label="Filter by employee" value={employeeFilter} onChange={event => setEmployeeFilter(event.target.value)} className="soft-input"><option value="ALL">All assignees</option><option value="UNASSIGNED">Unassigned</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select> : <select aria-label="Filter by priority" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} className="soft-input"><option value="ALL">All priorities</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>}
         <details className="workspace-task-options"><summary>More filters &amp; views</summary><div>
           <select aria-label="Filter by priority" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} className="soft-input"><option value="ALL">All priorities</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
-          <select aria-label="Filter by due date" value={dueFilter} onChange={event => setDueFilter(event.target.value)} className="soft-input"><option value="ALL">All due dates</option><option value="OVERDUE">Overdue only</option><option value="TODAY">Due today</option><option value="HAS_DUE_DATE">Has a due date</option></select>
+          <select aria-label="Filter by schedule" value={dueFilter} onChange={event => setDueFilter(event.target.value)} className="soft-input"><option value="ALL">All dates</option><option value="OVERDUE">Overdue only</option><option value="TODAY">Scheduled today</option><option value="HAS_DUE_DATE">Has a schedule</option></select>
           <select aria-label="Task focus" value={focus} onChange={event => setFocus(event.target.value)} className="soft-input">{[["ALL","All work"],["ACTIVE","Active"],["CLOSED","Closed"],["COMPLETED","Completed"],["OVERDUE","Overdue"],["NOT_STARTED","Not started"],["IN_FLIGHT","In progress and held"],["CREATED_TODAY","Created today"],["OTHER_CLOSED","Other closed"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
-          <select aria-label="Sort tasks" value={sort} onChange={event => setParam("sort",event.target.value)} className="soft-input"><option value="due">Deadline first</option><option value="priority">Priority first</option><option value="updated">Recently updated</option></select>
+          <select aria-label="Sort tasks" value={sort} onChange={event => setParam("sort",event.target.value)} className="soft-input"><option value="due">End date first</option><option value="priority">Priority first</option><option value="updated">Recently updated</option></select>
           <select aria-label="Task view" value={view} onChange={event => setView(event.target.value as TaskView)} className="soft-input"><option value="list">List view</option><option value="board">Board view</option><option value="calendar">Calendar view</option></select>
           <button type="button" className="secondary-button" onClick={() => { for (const key of ["q","status","employee","priority","due","sort","focus"]) setParam(key,null); }}>Clear filters</button>
         </div></details>
@@ -351,25 +386,25 @@ export default function CompanyTaskBoard({
         {visibleTasks.length || view === "calendar" ? view === "board" ? (
           <KanbanBoard tasks={visibleTasks} isAdmin={isAdmin} pendingId={pendingId} onUpdate={updateStatus} onOpen={(task) => void toggleComments(task.id)} />
         ) : view === "calendar" ? (
-          isAdmin ? <TaskCalendar tasks={visibleTasks} onOpen={(task) => void toggleComments(task.id)} /> : <EmployeeTaskCalendar tasks={visibleTasks} onOpen={task => void toggleComments(task.id)} />
+          isAdmin ? <TaskCalendar tasks={visibleTasks} onOpen={(task) => void toggleComments(task.id)} /> : <EmployeeTaskCalendar rangeMode tasks={visibleTasks} onOpen={task => void toggleComments(task.id)} />
         ) : (
           <>
-          <div className="grid gap-3 p-4 md:hidden">{visibleTasks.map((task) => <article key={task.id} className="rounded-xl border border-[var(--stroke)] p-4"><button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)]">{task.title}</button><p className="my-3 text-xs text-[var(--muted)]">{statusLabels[task.status]} / {formatDueDate(task.dueDate)} / {priorityLabels[task.priority]}</p>{isAdmin ? <p className="text-xs text-[var(--muted)]">{employeeLabel(task.assignee)}</p> : <TaskActions task={task} pending={pendingId === task.id} onUpdate={updateStatus} />}</article>)}</div>
+          <div className="grid gap-3 p-4 md:hidden">{visibleTasks.map((task) => <article key={task.id} className="rounded-xl border border-[var(--stroke)] p-4"><button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)]">{task.title}</button><p className="my-3 text-xs text-[var(--muted)]">{statusLabels[task.status]} / {formatTaskDateRange(task.startDate, task.dueDate)} / {priorityLabels[task.priority]}</p><TaskChecklistProgress title={task.title} items={task.checklistItems} className="mb-3" />{isAdmin ? <p className="text-xs text-[var(--muted)]">{employeeLabel(task.assignee)}</p> : <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} />}</article>)}</div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-left">
               <thead className="text-[11px] uppercase tracking-wider text-white/35">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Task</th>
                   <th className="px-4 py-3 font-semibold">Assignee</th>
-                  <th className="px-4 py-3 font-semibold">Due date</th>
+                  <th className="px-4 py-3 font-semibold">Date range</th>
                   <th className="px-4 py-3 font-semibold">Priority</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Checklist</th><th className="px-4 py-3 font-semibold">Updated</th>
+                  <th className="px-4 py-3 font-semibold">Progress</th><th className="px-4 py-3 font-semibold">Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
                 {visibleTasks.map((task) => {
-                  const progress = getTaskProgress(task);
+
                   return (
                   <Fragment key={task.id}>
                     <tr>
@@ -427,10 +462,10 @@ export default function CompanyTaskBoard({
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-white/55">
                         {task.dueDate && task.status !== "DONE" && task.status !== "APPROVED" && task.status !== "CANCELLED" && task.status !== "REJECTED" && task.dueDate.slice(0, 10) < today ? (
                           <span className="inline-flex items-center gap-2">
-                            {formatDueDate(task.dueDate)}
+                            {formatTaskDateRange(task.startDate, task.dueDate)}
                             <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-2 py-1 text-[10px] font-semibold text-rose-300">Overdue</span>
                           </span>
-                        ) : formatDueDate(task.dueDate)}
+                        ) : formatTaskDateRange(task.startDate, task.dueDate)}
                       </td>
                       <td className="px-4 py-4">
                         {isAdmin ? (
@@ -466,33 +501,9 @@ export default function CompanyTaskBoard({
                           ))}
                         </select>
                         ) : <span className={`employee-task-status status-${task.status.toLowerCase()}`}>{statusLabels[task.status]}</span>}
-                        {task.checklistItems.length ? <div
-                          className="mt-2 flex items-center gap-2"
-                          role="progressbar"
-                          aria-label={`Checklist completion for ${task.title}`}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={progress.percentage}
-                          aria-valuetext={progress.valueText}
-                        >
-                          <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-white/10">
-                            <div
-                              className={`h-full rounded-full transition-[width] duration-300 ${
-                                progress.percentage === 100
-                                  ? "bg-emerald-400"
-                                  : progress.percentage > 0
-                                    ? "bg-indigo-400"
-                                    : "bg-white/25"
-                              }`}
-                              style={{ width: `${progress.percentage}%` }}
-                            />
-                          </div>
-                          <span className="whitespace-nowrap text-right text-[10px] tabular-nums text-white/40">
-                            {progress.countText ? `${progress.countText} · ` : ""}{progress.percentage}%
-                          </span>
-                        </div> : <p className="mt-2 text-xs text-[var(--muted)]">{statusLabels[task.status]}</p>}
+
                       </td>
-                      <td className="whitespace-nowrap text-xs text-[var(--muted)]">{task.checklistItems.length ? `${task.checklistItems.filter(item=>item.isCompleted).length}/${task.checklistItems.length}` : "—"}</td><td className="whitespace-nowrap text-xs text-[var(--muted)]">{new Date(task.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+                      <td className="px-4 py-4"><TaskChecklistProgress title={task.title} items={task.checklistItems} className="min-w-32" /></td><td className="whitespace-nowrap text-xs text-[var(--muted)]">{new Date(task.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
                     </tr>
                   </Fragment>
                   );
@@ -511,17 +522,20 @@ export default function CompanyTaskBoard({
       {activeTask ? <dialog ref={dialogRef} aria-labelledby="task-detail-title" onClose={() => { if (!dialogRef.current?.open) setExpandedTaskId(null); }} className="fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-none w-full max-w-xl border-l border-[var(--stroke)] bg-[var(--panel)] p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-black/40">
         <div className="flex items-start justify-between gap-4 border-b border-[var(--stroke)] p-5"><div><p className="text-xs text-[var(--muted)]">Task details</p><h2 id="task-detail-title" className="mt-1 text-xl font-semibold">{activeTask.title}</h2></div><button autoFocus type="button" onClick={() => dialogRef.current?.close()} className="secondary-button px-3 py-2">Close</button></div>
         {[activeTask].map((task) => <div key={task.id} className="space-y-5 p-5">
-          <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatDueDate(task.dueDate)}</p>
+          {isAdmin ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} onDelete={() => deleteTask(task)} /> : null}
+          <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatTaskDateRange(task.startDate, task.dueDate)}</p>
+          <TaskChecklistProgress title={task.title} items={task.checklistItems} />
           <p className="text-xs text-[var(--muted)]">Checklist completion records steps finished; approval is a separate manager decision.</p>
           <p className="whitespace-pre-wrap text-sm">{task.description || "No additional instructions."}</p>
           {isAdmin && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
           {isAdmin && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
           {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
-          {!isAdmin ? <TaskActions task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
+          {!isAdmin ? <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
           {notice ? <p role="status" className="text-sm text-emerald-600">{notice}</p> : null}
           {error ? <p role="alert" className="text-sm text-rose-500">{error}</p> : null}
           {initialFeedback.filter((review) => review.taskId === task.id).length ? <section><h3 className="mb-2 text-sm font-semibold">Review feedback</h3>{initialFeedback.filter((review) => review.taskId === task.id).map((review) => <article key={review.id} className="mb-2 rounded-xl border border-[var(--stroke)] p-3"><p className="whitespace-pre-wrap text-sm">{review.feedback}</p><p className="mt-2 text-xs text-[var(--muted)]">{review.reviewer}{review.rating ? ` / ${review.rating}/5` : ""}</p></article>)}</section> : null}
           {task.checklistItems.length ? <section><h3 className="mb-2 text-sm font-semibold">Checklist</h3>{task.checklistItems.map((item) => <label key={item.id} className="flex items-start gap-3 py-2 text-sm"><input type="checkbox" checked={item.isCompleted} disabled={isAdmin || pendingId === task.id} onChange={(event) => void updateChecklistItem(task, item, event.target.checked)} /><span className={item.isCompleted ? "line-through opacity-60" : ""}>{item.title}</span></label>)}</section> : null}
+          <TaskSubmissionHistory taskId={task.id} updatedAt={task.updatedAt} />
                           <div className="mx-auto max-w-3xl">
                             <h3 className="text-sm font-semibold text-white/80">Progress updates</h3>
                             {commentsLoading ? <p className="mt-3 text-xs text-white/40">Loading updates...</p> : null}
@@ -576,7 +590,7 @@ function availableEmployeeStatuses(status: TaskStatus): TaskStatus[] {
 }
 
 function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
-  tasks: CompanyTask[]; onOpen: (task: CompanyTask) => void; isAdmin: boolean; pendingId: string | null; onUpdate: (task: CompanyTask, status: TaskAction, notes?: string) => Promise<boolean>;
+  tasks: CompanyTask[]; onOpen: (task: CompanyTask) => void; isAdmin: boolean; pendingId: string | null; onUpdate: TaskUpdateHandler;
 }) {
   const columns: { title: string; status: TaskStatus; matches: TaskStatus[] }[] = [
     { title: "To do", status: "TODO", matches: ["TODO", "ACCEPTED"] },
@@ -591,9 +605,10 @@ function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
       <div className="mb-2 flex items-center justify-between px-1"><h3 className="text-xs font-semibold text-[var(--foreground)]">{column.title}</h3><span className="rounded-md bg-[var(--panel)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">{tasks.filter((task) => column.matches.includes(task.status)).length}</span></div>
       <div className="grid content-start gap-2">{tasks.filter((task) => column.matches.includes(task.status)).map((task) => <article key={task.id} className="rounded-lg border border-[var(--stroke)] bg-[var(--panel)] p-3 shadow-sm">
         <button type="button" onClick={() => onOpen(task)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatDueDate(task.dueDate)}</time> : null}</div>
+        <TaskChecklistProgress title={task.title} items={task.checklistItems} className="mt-3" />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</time> : null}</div>
         {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-semibold text-indigo-700">{(task.assignee.name || task.assignee.email).slice(0, 1).toUpperCase()}</span><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}
-        {!isAdmin ? <div className="mt-3"><TaskActions task={task} pending={pendingId === task.id} onUpdate={onUpdate} /></div> : null}
+        {!isAdmin ? <div className="mt-3"><TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={onUpdate} /></div> : null}
       </article>)}</div>
     </section>)}
   </div>;
@@ -619,8 +634,8 @@ function TaskCalendar({ tasks, onOpen }: { tasks: CompanyTask[]; onOpen: (task: 
   }
   const firstDay = month.getDay();
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const monthTasks = tasks.filter((task) => task.dueDate?.startsWith(monthKey));
-  const agenda = monthTasks.filter((task) => !selectedDay || task.dueDate?.startsWith(selectedDay));
+  const monthTasks = tasks.filter((task) => taskOverlapsDateRange(task, `${monthKey}-01`, `${monthKey}-${String(daysInMonth).padStart(2, "0")}`));
+  const agenda = monthTasks.filter((task) => !selectedDay || taskIsScheduledOn(task, selectedDay));
   const cells = Array.from({ length: Math.ceil((firstDay + daysInMonth) / 7) * 7 }, (_, index) => {
     const day = index - firstDay + 1;
     return day > 0 && day <= daysInMonth ? day : null;
@@ -631,20 +646,21 @@ function TaskCalendar({ tasks, onOpen }: { tasks: CompanyTask[]; onOpen: (task: 
     <div className="hidden grid-cols-7 overflow-hidden rounded-xl border border-[var(--stroke)] md:grid">
       {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day} className="border-b border-[var(--stroke)] p-2 text-center text-xs text-[var(--muted)]">{day}</div>)}
       {cells.map((day, index) => {
-        const dateTasks = day ? monthTasks.filter((task) => task.dueDate?.startsWith(key(day))) : [];
-        return <div key={index} className="min-h-24 border-b border-r border-[var(--stroke)] p-2">{day ? <button type="button" aria-label={`Show tasks due ${key(day)}`} aria-pressed={selectedDay === key(day)} onClick={() => selectDay(key(day))} className="mb-2 text-xs text-[var(--accent)]">{day}</button> : null}<div className="grid gap-1">{dateTasks.slice(0, 3).map((task) => <button type="button" onClick={() => onOpen(task)} key={task.id} title={task.title} className="truncate rounded bg-[var(--panel-soft)] p-1 text-left text-xs">{task.title}</button>)}{dateTasks.length > 3 ? <button type="button" onClick={() => selectDay(key(day!))} className="text-left text-xs text-[var(--accent)]">+{dateTasks.length - 3} more</button> : null}</div></div>;
+        const dateTasks = day ? monthTasks.filter((task) => taskIsScheduledOn(task, key(day))) : [];
+        return <div key={index} className="min-h-24 border-b border-r border-[var(--stroke)] p-2">{day ? <button type="button" aria-label={`Show tasks scheduled ${key(day)}`} aria-pressed={selectedDay === key(day)} onClick={() => selectDay(key(day))} className="mb-2 text-xs text-[var(--accent)]">{day}</button> : null}<div className="grid gap-1">{dateTasks.slice(0, 3).map((task) => <button type="button" onClick={() => onOpen(task)} key={task.id} title={task.title} className="flex min-w-0 items-center justify-between gap-2 rounded bg-[var(--panel-soft)] p-1 text-left text-xs"><span className="truncate">{task.title}</span>{task.checklistItems.length ? <span className="shrink-0 tabular-nums text-[var(--muted)]">{getChecklistProgress(task.checklistItems).percentage}%</span> : null}</button>)}{dateTasks.length > 3 ? <button type="button" onClick={() => selectDay(key(day!))} className="text-left text-xs text-[var(--accent)]">+{dateTasks.length - 3} more</button> : null}</div></div>;
       })}
     </div>
-    <section className="mt-4" aria-label="Calendar agenda"><div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{selectedDay ? `Due ${selectedDay}` : "This month's agenda"}</h3>{selectedDay ? <button type="button" onClick={() => selectDay(null)} className="text-xs text-[var(--accent)]">Show whole month</button> : null}</div>
-      {agenda.length ? <div className="mt-2 grid gap-2">{agenda.map((task) => <button type="button" key={task.id} onClick={() => onOpen(task)} className="flex flex-wrap justify-between gap-2 rounded-lg border border-[var(--stroke)] p-3 text-left text-sm"><span>{task.title}</span><span className="text-xs text-[var(--muted)]">{formatDueDate(task.dueDate)} / {statusLabels[task.status]}</span></button>)}</div> : <p className="mt-3 text-sm text-[var(--muted)]">No tasks due {selectedDay ? "on this day" : "this month"}.</p>}
+    <section className="mt-4" aria-label="Calendar agenda"><div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{selectedDay ? `Scheduled ${selectedDay}` : "This month's agenda"}</h3>{selectedDay ? <button type="button" onClick={() => selectDay(null)} className="text-xs text-[var(--accent)]">Show whole month</button> : null}</div>
+      {agenda.length ? <div className="mt-2 grid gap-2">{agenda.map((task) => <button type="button" key={task.id} onClick={() => onOpen(task)} className="flex flex-wrap justify-between gap-2 rounded-lg border border-[var(--stroke)] p-3 text-left text-sm"><span>{task.title}</span><span className="text-xs text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)} / {statusLabels[task.status]}</span><TaskChecklistProgress title={task.title} items={task.checklistItems} className="basis-full" /></button>)}</div> : <p className="mt-3 text-sm text-[var(--muted)]">No tasks scheduled {selectedDay ? "on this day" : "this month"}.</p>}
     </section>
-    {tasks.some((task) => !task.dueDate) ? <details className="mt-4"><summary className="cursor-pointer text-sm text-[var(--muted)]">Tasks without a due date ({tasks.filter((task) => !task.dueDate).length})</summary><div className="mt-2 grid gap-2">{tasks.filter((task) => !task.dueDate).map((task) => <button type="button" key={task.id} onClick={() => onOpen(task)} className="text-left text-sm text-[var(--accent)]">{task.title}</button>)}</div></details> : null}
+    {tasks.some((task) => !task.dueDate) ? <details className="mt-4"><summary className="cursor-pointer text-sm text-[var(--muted)]">Unscheduled tasks ({tasks.filter((task) => !task.dueDate).length})</summary><div className="mt-2 grid gap-2">{tasks.filter((task) => !task.dueDate).map((task) => <button type="button" key={task.id} onClick={() => onOpen(task)} className="text-left text-sm text-[var(--accent)]">{task.title}</button>)}</div></details> : null}
   </div>;
 }
 
-function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: boolean; onUpdate: (task: CompanyTask, status: TaskAction, notes?: string) => Promise<boolean> }) {
+function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: boolean; onUpdate: TaskUpdateHandler }) {
   const [decision, setDecision] = useState<TaskAction | null>(null);
   const [notes, setNotes] = useState("");
+  const [images, setImages] = useState<File[]>([]);
   const actions: Partial<Record<TaskStatus, [TaskAction, string][]>> = {
     TODO: [["IN_PROGRESS", "Start task"], ["REPORT_BLOCKER", "Report blocker"]],
     ACCEPTED: [["IN_PROGRESS", "Start task"], ["REPORT_BLOCKER", "Report blocker"]],
@@ -653,13 +669,14 @@ function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: 
   };
   const available = actions[task.status] ?? [];
   return <div className="flex flex-wrap gap-2">
-    {decision && available.some(([action]) => action === decision) ? <form className="w-full space-y-2" onSubmit={async (event) => { event.preventDefault(); if (await onUpdate(task, decision, notes.trim())) { setDecision(null); setNotes(""); } }}>
+    {decision && available.some(([action]) => action === decision) ? <form className="w-full space-y-3" onSubmit={async (event) => { event.preventDefault(); if (await onUpdate(task, decision, notes.trim(), images)) { setDecision(null); setNotes(""); setImages([]); } }}>
       <label className="grid gap-2 text-xs">{decision === "REPORT_BLOCKER" ? "What is blocking this task?" : "Submission notes (optional)"}
-        <textarea className="soft-input w-full rounded-lg p-2 text-sm" required={decision === "REPORT_BLOCKER"} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} />
+        <textarea className="soft-input w-full rounded-lg p-2 text-sm" disabled={pending} required={decision === "REPORT_BLOCKER"} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} />
       </label>
-      <div className="flex gap-2"><button disabled={pending || (decision === "REPORT_BLOCKER" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? "Saving..." : decision === "REPORT_BLOCKER" ? "Send blocker report" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => setDecision(null)} className="secondary-button px-3 py-2 text-xs">Cancel</button></div>
+      {decision === "SUBMITTED_FOR_REVIEW" ? <SubmissionImagePicker disabled={pending} onChange={setImages} /> : null}
+      <div className="flex flex-wrap gap-2"><button disabled={pending || (decision === "REPORT_BLOCKER" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? images.length ? "Uploading..." : "Saving..." : decision === "REPORT_BLOCKER" ? "Send blocker report" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => { setDecision(null); setNotes(""); setImages([]); }} className="secondary-button px-3 py-2 text-xs">Cancel</button></div>
     </form> : null}
-    {available.map(([status, label], index) => <button key={status} type="button" disabled={pending} onClick={() => { if (status === "REPORT_BLOCKER" || status === "SUBMITTED_FOR_REVIEW") setDecision(status); else onUpdate(task, status); }} className={`${index === 0 ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{pending ? "Saving..." : label}</button>)}
+    {!decision ? available.map(([status, label], index) => <button key={status} type="button" disabled={pending} onClick={() => { if (status === "REPORT_BLOCKER" || status === "SUBMITTED_FOR_REVIEW") setDecision(status); else onUpdate(task, status); }} className={`${index === 0 ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{pending ? "Saving..." : label}</button>) : null}
     {task.status === "SUBMITTED_FOR_REVIEW" ? <p className="text-xs text-[var(--muted)]">Awaiting manager review</p> : null}
     {task.status === "ON_HOLD" ? <p className="text-xs text-[var(--muted)]">On hold. Your manager or administrator must resume this task.</p> : null}
   </div>;

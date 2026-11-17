@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
+import { submissionImageSelect, submissionImageUrl } from "@/lib/submission-images";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -27,14 +28,17 @@ export async function GET() {
       assignee: { select: { id: true, name: true, email: true } },
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: {
         id: true, notes: true, createdAt: true, submittedBy: { select: { name: true, email: true } },
+        images: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionImageSelect },
       } },
     },
   });
   return NextResponse.json({ ok: true, tasks: tasks.map((task) => ({
-    ...task, dueDate: task.dueDate?.toISOString() ?? null,
+    id: task.id, title: task.title, description: task.description, assignee: task.assignee,
+    dueDate: task.dueDate?.toISOString() ?? null,
     submission: task.submissions[0] ? {
       ...task.submissions[0], createdAt: task.submissions[0].createdAt.toISOString(),
       submitter: task.submissions[0].submittedBy.name || task.submissions[0].submittedBy.email,
+      images: task.submissions[0].images.map((image) => ({ ...image, url: submissionImageUrl(task.id, task.submissions[0].id, image.id) })),
     } : null,
   })) });
 }
