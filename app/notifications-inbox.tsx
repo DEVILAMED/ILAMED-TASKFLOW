@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
+import UserAvatar from "@/app/user-avatar";
+import { announceMenuOpened, installMenuDismissal } from "@/lib/dismissible-menu";
 
 type InboxNotification = {
   id: string;
@@ -11,6 +13,7 @@ type InboxNotification = {
   href: string;
   readAt: string | null;
   createdAt: string;
+  actor?: { name: string | null; email: string; avatarUrl: string | null } | null;
 };
 
 type InboxResponse = {
@@ -22,11 +25,18 @@ type InboxResponse = {
 
 export default function NotificationsInbox({ sidebar = false }: { sidebar?: boolean } = {}) {
   const router = useRouter();
+  const container = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<InboxNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !container.current) return;
+    return installMenuDismissal({ container: container.current, trigger: trigger.current, isOpen: () => true, close: () => setOpen(false) });
+  }, [open]);
 
   const refresh = useCallback(async () => {
     try {
@@ -94,14 +104,19 @@ export default function NotificationsInbox({ sidebar = false }: { sidebar?: bool
   }
 
   return (
-    <div className="relative">
+    <div ref={container} className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
         aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => {
           setOpen((value) => !value);
-          if (!open) void refresh();
+          if (!open) {
+            if (container.current) announceMenuOpened(container.current);
+            void refresh();
+          }
         }}
         className={sidebar ? "workspace-nav-item w-full text-left" : "workspace-notification-button"}
       >
@@ -115,7 +130,7 @@ export default function NotificationsInbox({ sidebar = false }: { sidebar?: bool
       </button>
 
       {open ? (
-        <div className={`${sidebar ? "fixed left-4 top-20" : "absolute right-0 top-12"} z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10`}>
+        <div id={panelId} className={`${sidebar ? "fixed left-4 top-20" : "absolute right-0 top-12"} z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10`}>
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Notifications</h2>
@@ -141,6 +156,7 @@ export default function NotificationsInbox({ sidebar = false }: { sidebar?: bool
                 className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 disabled:opacity-60 ${notification.readAt ? "" : "bg-indigo-50/60"}`}
               >
                 <span className="flex items-start gap-3">
+                  {notification.actor ? <UserAvatar name={notification.actor.name || notification.actor.email} src={notification.actor.avatarUrl} /> : null}
                   <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.readAt ? "bg-transparent" : "bg-indigo-600"}`} />
                   <span className="min-w-0">
                     <span className="block text-sm leading-5 text-slate-700">{notification.message}</span>

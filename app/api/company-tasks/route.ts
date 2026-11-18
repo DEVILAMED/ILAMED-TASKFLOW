@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID, ensureCompanyTaskProject } from "@/services/company-tasks";
 import { parseCompanyTaskDetails, validateCompanyTaskDateRange } from "@/lib/company-task-management";
+import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 
 const taskSelect = {
   id: true,
@@ -15,7 +16,7 @@ const taskSelect = {
   dueDate: true,
   createdAt: true,
   updatedAt: true,
-  assignee: { select: { id: true, name: true, email: true } },
+  assignee: { select: USER_IDENTITY_SELECT },
   checklistItems: {
     orderBy: { position: "asc" },
     select: { id: true, title: true, isCompleted: true, position: true },
@@ -41,7 +42,7 @@ export async function GET() {
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
   });
 
-  return NextResponse.json({ ok: true, tasks });
+  return NextResponse.json({ ok: true, tasks: tasks.map(task => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null })) });
 }
 
 export async function POST(request: Request) {
@@ -152,5 +153,5 @@ export async function POST(request: Request) {
     return createdTask;
   });
 
-  return NextResponse.json({ ok: true, task }, { status: 201 });
+  return NextResponse.json({ ok: true, task: { ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null } }, { status: 201 });
 }

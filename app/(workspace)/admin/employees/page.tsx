@@ -5,33 +5,40 @@ import EmployeePresence from "../employee-presence";
 import Link from "next/link";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
+import { getReviewPeriod, MIN_REVIEWED_TASKS, summarizeReviewQuality } from "@/lib/review-quality";
+import { getReviewEvidence } from "@/services/review-quality";
+import ReviewQualityBadge from "@/app/review-quality-badge";
+import UserAvatar from "@/app/user-avatar";
+import { withAvatarUrl } from "@/lib/user-avatar";
 
 export default async function EmployeesPage() {
   const currentUser = await getCurrentUser();
   if (!currentUser) redirect("/login");
   if (currentUser.role !== "ADMIN") redirect("/dashboard");
-  const [users, departments, tasks, reviews] = await Promise.all([
+  const period = getReviewPeriod();
+  const [userRows, departments, tasks, reviews] = await Promise.all([
     prisma.user.findMany({
       orderBy: [{ name: "asc" }, { email: "asc" }],
-      select: { id: true, name: true, email: true, role: true, isBlocked: true, createdAt: true, lastSeenAt: true,
+      select: { id: true, name: true, email: true, avatar: true, role: true, isBlocked: true, createdAt: true, lastSeenAt: true,
         employeeProfile: { select: { employeeCode: true, phone: true, designation: true, joiningDate: true, employmentStatus: true, departmentId: true, managerId: true } },
       },
     }),
     prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID }, select: { assigneeId: true, status: true } }),
-    prisma.taskReview.findMany({ where: { rating: { not: null }, submission: { task: { projectId: COMPANY_TASK_PROJECT_ID } } }, select: { rating: true, submission: { select: { task: { select: { assigneeId: true } } } } } }),
+    getReviewEvidence(period),
   ]);
+  const users = userRows.map(withAvatarUrl);
   const teamMembers = users.filter((user) => user.role !== "ADMIN");
+  const qualityByEmployee = new Map(summarizeReviewQuality(reviews, period).employees.map(person => [person.employeeId, person]));
   return <>
-    <div className="workspace-view"><WorkspacePageHeading kicker="ROSTER" title="Team" />
+    <div className="workspace-view"><WorkspacePageHeading kicker="ROSTER" title="Team" description={`Review quality: ${period.label.toLowerCase()} (${period.startDay} to ${period.endDay}, India time). At least ${MIN_REVIEWED_TASKS} distinct reviewed tasks per employee; task totals show current assignments.`} />
       <section className="workspace-team-grid" aria-label="Team members">{teamMembers.map(employee => {
         const assigned = tasks.filter(task => task.assigneeId === employee.id);
         const done = assigned.filter(task => ["APPROVED","DONE"].includes(task.status)).length;
         const pending = assigned.filter(task => !["APPROVED","DONE","REJECTED","CANCELLED"].includes(task.status)).length;
-        const ratings = reviews.filter(review => review.submission.task.assigneeId === employee.id);
-        const score = ratings.length ? Math.round(ratings.reduce((sum,review)=>sum+(review.rating || 0),0)/ratings.length*20) : null;
+        const quality = qualityByEmployee.get(employee.id);
         const name = employee.name || employee.email;
-        return <Link key={employee.id} href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="workspace-surface workspace-team-card"><div className="workspace-team-person"><span className="workspace-team-avatar">{name.split(/\s+/).map(part=>part[0]).slice(0,2).join("").toUpperCase()}</span><div><h2>{name}</h2><p>{employee.employeeProfile?.designation || (employee.role === "MANAGER" ? "Team manager" : "Team member")}</p></div><span className={`workspace-score-badge ${score !== null && score >= 70 ? "is-good" : ""}`} title="Average manager review rating converted to 100">{score === null ? "Not rated" : `${score} · ${score>=70?"Good":"Needs review"}`}</span></div><div className="workspace-team-counts">{[[assigned.length,"Tasks"],[done,"Done"],[pending,"Pending"],["—","Logged"]].map(([value,label])=><div key={String(label)}><strong>{value}</strong><span>{label}</span></div>)}</div></Link>;
+        return <Link key={employee.id} href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="workspace-surface workspace-team-card"><div className="workspace-team-person"><UserAvatar name={name} src={employee.avatarUrl} size={46} className="workspace-team-avatar" /><div><h2>{name}</h2><p>{employee.employeeProfile?.designation || (employee.role === "MANAGER" ? "Team manager" : "Team member")}</p></div><ReviewQualityBadge score={quality?.score ?? null} ratedTaskCount={quality?.ratedTaskCount ?? 0} /></div><div className="workspace-team-counts">{[[assigned.length,"Tasks"],[done,"Done"],[pending,"Pending"],[quality?.ratedTaskCount ?? 0,"Reviewed"]].map(([value,label])=><div key={String(label)}><strong>{value}</strong><span>{label}</span></div>)}</div></Link>;
       })}</section>{!teamMembers.length ? <div className="workspace-empty-panel">No employees have joined yet.</div> : null}
     </div>
     <details className="workspace-additional" open><summary>Manage user accounts</summary><div className="mb-4 mt-4"><Link href="/departments" className="secondary-button workspace-standard-button">Manage departments</Link></div>

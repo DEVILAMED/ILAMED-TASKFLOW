@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import CompanyTaskBoard from "@/app/(workspace)/company-tasks/company-task-board";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
 import { NewTaskButton } from "@/app/new-company-task-dialog";
+import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const calendar = (await searchParams).view === "calendar";
@@ -26,7 +26,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         dueDate: true,
         createdAt: true,
         updatedAt: true,
-        assignee: { select: { id: true, name: true, email: true, employeeProfile: { select: { departmentId: true } } } },
+        assignee: { select: { ...USER_IDENTITY_SELECT, employeeProfile: { select: { departmentId: true } } } },
         checklistItems: {
           orderBy: { position: "asc" },
           select: { id: true, title: true, isCompleted: true, position: true },
@@ -37,6 +37,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   ]);
   return <>
     <WorkspacePageHeading kicker={calendar ? "SCHEDULE" : "WORKFLOW"} title={calendar ? "Calendar" : "Tasks"} action={<NewTaskButton />} />
-    <CompanyTaskBoard isAdmin employees={employees} initialTasks={tasks.map((task) => ({ ...task, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
+    <CompanyTaskBoard isAdmin employees={employees} initialTasks={tasks.map((task) => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
   </>;
 }

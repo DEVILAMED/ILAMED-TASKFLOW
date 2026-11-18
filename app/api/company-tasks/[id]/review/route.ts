@@ -3,6 +3,7 @@ import { ReviewDecision, TaskStatus, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
+import { isReviewRating } from "@/lib/review-quality";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,7 +14,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: "Manager access is required to review work." }, { status: 403 });
   }
 
-  let payload: { decision?: unknown; rating?: unknown; feedback?: unknown } | null;
+  let payload: { decision?: unknown; rating?: unknown; feedback?: unknown; submissionId?: unknown } | null;
   try { payload = await request.json(); } catch {
     return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
   }
@@ -26,21 +27,27 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!feedback || feedback.length > 2000) {
     return NextResponse.json({ ok: false, error: "Review feedback must be between 1 and 2000 characters." }, { status: 400 });
   }
-  if (!Number.isInteger(rating) || (rating as number) < 1 || (rating as number) > 5) {
+  if (!isReviewRating(rating)) {
     return NextResponse.json({ ok: false, error: "Provide a quality rating from 1 to 5." }, { status: 400 });
+  }
+  if (typeof payload?.submissionId !== "string" || !payload.submissionId.trim()) {
+    return NextResponse.json({ ok: false, error: "Choose a pending submission to review." }, { status: 400 });
   }
 
   const { id } = await params;
   const task = await prisma.task.findFirst({
     where: { id, projectId: COMPANY_TASK_PROJECT_ID, status: TaskStatus.SUBMITTED_FOR_REVIEW },
     select: {
-      id: true, title: true, status: true, assigneeId: true,
+      id: true, title: true, status: true, assigneeId: true, updatedAt: true,
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, submittedById: true } },
     },
   });
   const submission = task?.submissions[0];
   if (!task || !submission || !task.assigneeId) {
     return NextResponse.json({ ok: false, error: "No pending submission was found for this task." }, { status: 404 });
+  }
+  if (submission.id !== payload.submissionId) {
+    return NextResponse.json({ ok: false, error: "The submission has changed. Refresh the queue before reviewing." }, { status: 409 });
   }
   if (submission.submittedById === reviewer.id) {
     return NextResponse.json({ ok: false, error: "You cannot review your own submission." }, { status: 403 });
@@ -63,7 +70,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const nextStatus = decision as TaskStatus;
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.task.updateMany({
-      where: { id: task.id, status: TaskStatus.SUBMITTED_FOR_REVIEW },
+      where: { id: task.id, status: TaskStatus.SUBMITTED_FOR_REVIEW, updatedAt: task.updatedAt },
       data: { status: nextStatus },
     });
     if (!updated.count) return false;
@@ -84,6 +91,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     return true;
   });
 
-  if (!result) return NextResponse.json({ ok: false, error: "This submission has already been reviewed." }, { status: 409 });
+  if (!result) return NextResponse.json({ ok: false, error: "This submission changed or was already reviewed. Refresh the queue and try again." }, { status: 409 });
   return NextResponse.json({ ok: true, status: nextStatus });
 }

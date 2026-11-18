@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isDatabaseConnectionError } from "@/lib/database-errors";
+import { userAvatarUrl } from "@/lib/user-avatar";
 
 export { isValidEmail, isStrongPassword } from "@/lib/user-accounts";
 
@@ -11,6 +12,7 @@ export type AuthUser = {
   email: string;
   name: string | null;
   role: UserRole;
+  avatarUrl: string | null;
 };
 
 export const SESSION_COOKIE = "ilamed_session";
@@ -137,6 +139,7 @@ export async function getUserBySessionToken(
             email: true,
             name: true,
             role: true,
+            avatar: true,
             isBlocked: true,
           },
         },
@@ -151,6 +154,7 @@ export async function getUserBySessionToken(
             email: foundSession.user.email,
             name: foundSession.user.name,
             role: foundSession.user.role,
+            avatarUrl: userAvatarUrl(foundSession.user.id, foundSession.user.avatar),
           },
           userIsBlocked: foundSession.user.isBlocked,
         }

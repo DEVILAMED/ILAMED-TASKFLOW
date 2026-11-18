@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { accessibleProjectWhere, accessibleTaskWhere } from "@/project-access";
 import type { Prisma } from "@prisma/client";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
+import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -41,6 +42,7 @@ export async function GET() {
         projectId: true,
         taskId: true,
         task: { select: { assigneeId: true } },
+        actor: { select: USER_IDENTITY_SELECT },
         readAt: true,
         createdAt: true,
       },
@@ -52,6 +54,7 @@ export async function GET() {
     unreadCount,
     notifications: notifications.map((notification) => ({
       ...notification,
+      actor: notification.actor ? withAvatarUrl(notification.actor) : null,
       href: notification.projectId === COMPANY_TASK_PROJECT_ID && notification.taskId ? companyTaskHref(user.role, user.id, notification.taskId, notification.task?.assigneeId ?? null, notification.type === "TASK_SUBMITTED") : notification.href,
       readAt: notification.readAt?.toISOString() ?? null,
       createdAt: notification.createdAt.toISOString(),

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import companyLogo from "@/public/new-logo-1ilamed2026 (1).png";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import { WorkspaceSwitcher } from "@/app/workspace-switcher";
 import NotificationsInbox from "@/app/notifications-inbox";
 import PresenceHeartbeat from "@/app/presence-heartbeat";
@@ -15,6 +15,8 @@ import type { WorkspaceRole } from "@/lib/workspace-navigation";
 import { Menu } from "lucide-react";
 import NewCompanyTaskDialog from "@/app/new-company-task-dialog";
 import DashboardGuide from "@/app/dashboard-guide";
+import UserAvatar from "@/app/user-avatar";
+import { announceMenuOpened, installMenuDismissal } from "@/lib/dismissible-menu";
 
 type WorkspaceShellProps = {
   title: string;
@@ -22,6 +24,7 @@ type WorkspaceShellProps = {
   userName: string;
   userId?: string;
   userEmail: string;
+  userAvatarUrl?: string | null;
   userRole: WorkspaceRole;
   userDesignation?: string;
   userAction?: ReactNode;
@@ -36,17 +39,33 @@ function Brand() {
   </Link>;
 }
 
-export function WorkspaceShell({ title, currentWorkspace, userName, userId, userEmail, userRole, userDesignation, userAction, topbarRight, taskEmployees = [], children }: WorkspaceShellProps) {
+export function WorkspaceShell({ title, currentWorkspace, userName, userId, userEmail, userRole, userAvatarUrl, userDesignation, userAction, topbarRight, taskEmployees = [], children }: WorkspaceShellProps) {
   const pathname = usePathname();
+  const accountMenu = useRef<HTMLDetailsElement>(null);
+  const mobileMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const cleanups = [accountMenu.current, mobileMenu.current].flatMap(container => {
+      if (!container) return [];
+      container.open = false;
+      return [installMenuDismissal({
+        container,
+        trigger: container.querySelector("summary"),
+        isOpen: () => container.open,
+        close: () => { container.open = false; },
+      })];
+    });
+    return () => { cleanups.forEach(cleanup => cleanup()); };
+  }, [pathname]);
   const activeWorkspace = pathname === "/todos" ? "personal" : currentWorkspace;
-  const initials = (userName || userEmail || "U").trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   const role = userDesignation || (userRole === "ADMIN" ? "Admin" : userRole === "MANAGER" ? "Manager" : "Team member");
   const navigation = <Suspense fallback={<WorkspaceNavigationFallback role={userRole} workspace={activeWorkspace} />}><WorkspaceNavigation role={userRole} workspace={activeWorkspace} /></Suspense>;
   const userProfile = <Link href="/profile" title={userEmail} className="workspace-sidebar-profile">
-    <span className="workspace-avatar">{initials}</span>
+    <UserAvatar name={userName || userEmail} src={userAvatarUrl} className="workspace-avatar" />
     <span className="min-w-0"><span className="workspace-profile-name">{userName}</span><span className="workspace-profile-role">{role} / ILAMED</span></span>
   </Link>;
-  const accountControls = <div className="workspace-account-controls">
+  const accountControls = <div className="workspace-account-controls" onClick={event => {
+    if (event.target instanceof Element && event.target.closest("a[href]") && accountMenu.current) accountMenu.current.open = false;
+  }}>
     <Link href="/profile" className="workspace-account-link">My profile</Link>
     <GlobalSearch />
     <div className="flex items-center justify-between gap-3"><span className="text-xs text-[var(--muted)]">Appearance</span><ThemeToggle /></div>
@@ -68,7 +87,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userId, user
     </aside>
     <div className="min-w-0 flex-1">
       <header className="workspace-topbar">
-        <details className="workspace-mobile-nav relative lg:hidden" data-guide="mobile-menu">
+        <details ref={mobileMenu} className="workspace-mobile-nav relative lg:hidden" data-guide="mobile-menu" onToggle={event => { if (event.currentTarget.open) announceMenuOpened(event.currentTarget); }}>
           <summary aria-label="Open navigation" className="workspace-control flex h-9 w-9 items-center justify-center rounded-lg"><Menu aria-hidden="true" size={19} strokeWidth={1.8} /></summary>
           <div className="workspace-mobile-panel"><Brand />{navigation}<div className="workspace-sidebar-footer">{userProfile}<div className="workspace-signout">{userAction}</div></div></div>
         </details>
@@ -77,9 +96,9 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userId, user
           {topbarRight ? <div className="hidden xl:block">{topbarRight}</div> : null}
           <DashboardGuide account={userId || userEmail} role={userRole} workspace={activeWorkspace}/>
           <div className="workspace-topbar-notifications" data-guide="notifications"><NotificationsInbox /></div>
-          <details className="workspace-account-menu" data-guide="account-menu">
+          <details ref={accountMenu} className="workspace-account-menu" data-guide="account-menu" onToggle={event => { if (event.currentTarget.open) announceMenuOpened(event.currentTarget); }}>
             <summary aria-label={`Account options for ${userName}`} className="workspace-user-chip">
-              <span className="workspace-avatar">{initials}</span>
+              <UserAvatar name={userName || userEmail} src={userAvatarUrl} className="workspace-avatar" />
               <span className="workspace-topbar-user"><span className="workspace-profile-name">{userName}</span><span className="workspace-profile-role">{role}</span></span>
             </summary>
             {accountControls}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 import { Prisma, TaskStatus, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -169,7 +170,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         createdAt: true,
         updatedAt: true,
         assigneeId: true,
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: { select: USER_IDENTITY_SELECT },
         checklistItems: {
           orderBy: { position: "asc" },
           select: { id: true, title: true, isCompleted: true, position: true },
@@ -272,7 +273,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: task.rangeError }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, task });
+  return NextResponse.json({ ok: true, task: { ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null } });
 }
 
 export async function DELETE(_request: Request, { params }: RouteContext) {

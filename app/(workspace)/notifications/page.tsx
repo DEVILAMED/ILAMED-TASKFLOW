@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
+import UserAvatar from "@/app/user-avatar";
 
-type Notification = { id: string; type: string; message: string; href: string; readAt: string | null; createdAt: string };
+type Notification = { id: string; type: string; message: string; href: string; readAt: string | null; createdAt: string; actor?: { name: string | null; email: string; avatarUrl: string | null } | null };
 const titles: Record<string, string> = { TASK_SUBMITTED: "Task submitted for approval", TASK_ASSIGNED: "New task assigned", TASK_APPROVED: "Task approved", TASK_REVISION_REQUESTED: "Revision requested", TASK_REJECTED: "Task reviewed", TASK_COMMENTED: "New task update", MENTIONED: "You were mentioned", DUE_DATE_CHANGED: "Deadline updated", TASK_UNASSIGNED: "Task assignment updated" };
 
 export default function NotificationsPage() {
@@ -38,6 +39,7 @@ export default function NotificationsPage() {
     {error ? <p role="alert" className="workspace-form-error">{error} <button type="button" onClick={() => void refresh()} className="underline">Try again</button></p> : null}
     <section className="workspace-notification-list" aria-label="Notification history">
       {loading ? <p className="workspace-empty-panel" role="status">Loading notifications…</p> : !items.length && !error ? <p className="workspace-empty-panel">You’re all caught up.</p> : items.map(item => <article key={item.id} className={`workspace-notification-item ${item.readAt ? "" : "is-unread"}`}>
+        {item.actor ? <UserAvatar name={item.actor.name || item.actor.email} src={item.actor.avatarUrl} size={40} /> : null}
         <div><h2>{titles[item.type] || "Workspace update"}</h2><p>{item.message}</p><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</time><Link href={item.href} onClick={() => { if (!item.readAt) void markRead(item.id); }}>Open task →</Link></div>
         {!item.readAt ? <span className="workspace-unread-dot" aria-label="Unread" /> : null}
       </article>)}

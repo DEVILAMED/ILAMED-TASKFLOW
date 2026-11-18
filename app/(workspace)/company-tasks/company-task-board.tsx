@@ -9,14 +9,15 @@ import { formatTaskDateRange, taskIsScheduledOn, taskOverlapsDateRange } from "@
 import CompanyTaskEditor, { type CompanyTaskChanges } from "@/app/company-task-editor";
 import SubmissionImagePicker from "@/app/submission-image-picker";
 import TaskSubmissionHistory from "@/app/task-submission-history";
+import UserAvatar from "@/app/user-avatar";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
 type TaskAction = TaskStatus | "REPORT_BLOCKER";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 type TaskView = "list" | "board" | "calendar";
-type Employee = { id: string; name: string | null; email: string };
+type Employee = { id: string; name: string | null; email: string; avatarUrl?: string | null };
 type ChecklistItem = { id: string; title: string; isCompleted: boolean; position: number };
-type TaskComment = { id: string; content: string; createdAt: string; author: string; authorId: string };
+type TaskComment = { id: string; content: string; createdAt: string; author: string; authorId: string; authorAvatarUrl?: string | null };
 type CompanyTask = {
   id: string;
   title: string;
@@ -442,6 +443,8 @@ export default function CompanyTaskBoard({
                       </td>
                       {isAdmin ? (
                         <td className="px-4 py-4">
+                          <div className="user-identity">
+                          {task.assignee ? <UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} size={28} /> : null}
                           <select
                             aria-label={`Reassign ${task.title}`}
                             value={task.assignee?.id ?? ""}
@@ -457,8 +460,9 @@ export default function CompanyTaskBoard({
                               <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>
                             ))}
                           </select>
+                          </div>
                         </td>
-                      ) : <td className="px-4 py-4 text-sm text-[var(--foreground)]">{employeeLabel(task.assignee)}</td>}
+                      ) : <td className="px-4 py-4 text-sm text-[var(--foreground)]"><span className="user-identity">{task.assignee ? <UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} size={28} /> : null}{employeeLabel(task.assignee)}</span></td>}
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-white/55">
                         {task.dueDate && task.status !== "DONE" && task.status !== "APPROVED" && task.status !== "CANCELLED" && task.status !== "REJECTED" && task.dueDate.slice(0, 10) < today ? (
                           <span className="inline-flex items-center gap-2">
@@ -527,6 +531,7 @@ export default function CompanyTaskBoard({
           <TaskChecklistProgress title={task.title} items={task.checklistItems} />
           <p className="text-xs text-[var(--muted)]">Checklist completion records steps finished; approval is a separate manager decision.</p>
           <p className="whitespace-pre-wrap text-sm">{task.description || "No additional instructions."}</p>
+          {task.assignee ? <p className="user-identity text-sm"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} />{employeeLabel(task.assignee)}</p> : null}
           {isAdmin && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
           {isAdmin && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
           {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
@@ -544,7 +549,7 @@ export default function CompanyTaskBoard({
                                 {comments[task.id].map((comment) => (
                                   <article key={comment.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
                                     <div className="flex flex-wrap justify-between gap-2">
-                                      <p className="text-xs font-semibold text-white/70">{comment.author}</p>
+                                      <p className="user-identity text-xs font-semibold text-white/70"><UserAvatar name={comment.author} src={comment.authorAvatarUrl} size={24} />{comment.author}</p>
                                       <time className="text-[10px] text-white/35">{new Date(comment.createdAt).toLocaleString()}</time>
                                     </div>
                                     <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-white/55">{comment.content}</p>
@@ -607,7 +612,7 @@ function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
         <button type="button" onClick={() => onOpen(task)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
         <TaskChecklistProgress title={task.title} items={task.checklistItems} className="mt-3" />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</time> : null}</div>
-        {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-semibold text-indigo-700">{(task.assignee.name || task.assignee.email).slice(0, 1).toUpperCase()}</span><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}
+        {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} size={24} /><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}
         {!isAdmin ? <div className="mt-3"><TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={onUpdate} /></div> : null}
       </article>)}</div>
     </section>)}

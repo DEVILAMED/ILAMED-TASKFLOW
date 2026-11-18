@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatTaskDateRange } from "@/lib/task-dates";
 import TaskChecklistProgress from "@/app/task-checklist-progress";
+import UserAvatar from "@/app/user-avatar";
 
 type TeamTask = {
   id: string;
@@ -13,7 +14,7 @@ type TeamTask = {
   startDate: Date | string | null;
   dueDate: Date | string | null;
   checklistItems: { isCompleted: boolean }[];
-  assignee: { name: string | null; email: string } | null;
+  assignee: { name: string | null; email: string; avatarUrl?: string | null } | null;
   comments: { id: string; content: string }[];
 };
 
@@ -60,7 +61,7 @@ export default function TeamTaskControls({ tasks }: { tasks: TeamTask[] }) {
     {!tasks.length ? <p className="mt-3 text-sm text-[var(--muted)]">No team tasks require hold or resume controls.</p> : null}
     <div className="mt-3 divide-y divide-[var(--stroke)]">{tasks.map((task) => <article id={`task-${task.id}`} key={task.id} className="scroll-mt-24 py-3 target:rounded-xl target:bg-[var(--panel-soft)] target:p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="text-sm font-medium">{task.title}</h3><p className="mt-1 text-xs text-[var(--muted)]">{task.assignee?.name || task.assignee?.email} / {task.status.replaceAll("_", " ").toLowerCase()}</p></div>
+        <div><h3 className="text-sm font-medium">{task.title}</h3><p className="user-identity mt-1 text-xs text-[var(--muted)]">{task.assignee ? <UserAvatar name={task.assignee.name || task.assignee.email} src={task.assignee.avatarUrl} size={24} /> : null}{task.assignee?.name || task.assignee?.email} / {task.status.replaceAll("_", " ").toLowerCase()}</p></div>
         {["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED", "ON_HOLD"].includes(task.status) ? <button type="button" disabled={pending} onClick={() => void changeStatus(task)} className={`${task.status === "ON_HOLD" ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{task.status === "ON_HOLD" ? "Resume task" : "Put on hold"}</button> : null}
       </div>
       <p className="mt-2 text-xs text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</p>

@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
+import { USER_IDENTITY_SELECT, userAvatarUrl } from "@/lib/user-avatar";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -41,7 +42,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       id: true,
       content: true,
       createdAt: true,
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: USER_IDENTITY_SELECT },
     },
   });
 
@@ -53,6 +54,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       createdAt: comment.createdAt.toISOString(),
       author: comment.user.name || comment.user.email,
       authorId: comment.user.id,
+      authorAvatarUrl: userAvatarUrl(comment.user.id, comment.user.avatar),
     })),
   });
 }
@@ -94,7 +96,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         id: true,
         content: true,
         createdAt: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: USER_IDENTITY_SELECT },
       },
     });
 
@@ -123,6 +125,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       createdAt: comment.createdAt.toISOString(),
       author: comment.user.name || comment.user.email,
       authorId: comment.user.id,
+      authorAvatarUrl: userAvatarUrl(comment.user.id, comment.user.avatar),
     },
   }, { status: 201 });
 }

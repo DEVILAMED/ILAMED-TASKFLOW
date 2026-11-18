@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserRoleControl from "./user-role-control";
 import EmployeeAccountEditor from "./employee-account-editor";
+import UserAvatar from "@/app/user-avatar";
+import ProfilePhotoUploader from "@/app/profile-photo-uploader";
 
 type Employee = {
   id: string;
   name: string | null;
   email: string;
+  avatarUrl?: string | null;
   role: "USER" | "MANAGER" | "ADMIN";
   isBlocked: boolean;
   createdAt: string;
@@ -107,6 +110,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
             <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
+                <UserAvatar name={employee.name || employee.email} src={employee.avatarUrl} />
                 <p className="text-sm font-medium text-white/80">{employee.name || "Unnamed user"}</p>
                 <span className="badge-pill text-[10px]">{roleLabels[employee.role]}</span>
                 {employee.id === currentUserId ? <span className="text-xs font-medium text-[var(--accent)]">You</span> : null}
@@ -132,6 +136,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
             </div> : null}
             </div>
             {employee.role !== "ADMIN" ? <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} departments={departments} managers={managers} onSaved={() => router.refresh()} /> : null}
+            {employee.role !== "ADMIN" || employee.id === currentUserId ? <details className="mt-3 rounded-xl border border-[var(--stroke)] p-3"><summary className="cursor-pointer text-xs font-medium text-[var(--muted)]">Profile picture</summary><ProfilePhotoUploader userId={employee.id} name={employee.name || employee.email} avatarUrl={employee.avatarUrl ?? null} /></details> : null}
           </div>
         );
       })}

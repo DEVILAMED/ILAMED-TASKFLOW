@@ -6,6 +6,8 @@ import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import TeamTaskControls from "./team-task-controls";
 import QuickAssign from "./quick-assign";
 import { formatTaskDateRange } from "@/lib/task-dates";
+import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
+import UserAvatar from "@/app/user-avatar";
 
 export default async function ManagerDashboard() {
   const user = await getCurrentUser();
@@ -17,10 +19,12 @@ export default async function ManagerDashboard() {
   const members = teamIds.length ? await prisma.teamMembership.findMany({ where: { teamId: { in: teamIds } }, select: { userId: true } }) : [];
   const memberIds = [...new Set(members.map((item) => item.userId).filter((id) => id !== user.id))];
   const employeeIds = [...new Set([...memberIds, user.id])];
-  const [employees, tasks] = await Promise.all([
-    prisma.user.findMany({ where: { id: { in: memberIds }, role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } }),
-    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: { name: true, email: true } } } }),
+  const [employeeRows, taskRows] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: memberIds }, role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: USER_IDENTITY_SELECT }),
+    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: USER_IDENTITY_SELECT } } }),
   ]);
+  const employees = employeeRows.map(withAvatarUrl);
+  const tasks = taskRows.map(task => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null }));
   const today = new Date().toISOString().slice(0, 10);
   const terminal = (status: string) => ["APPROVED", "DONE", "CANCELLED", "REJECTED"].includes(status);
   const pending = tasks.filter((task) => !terminal(task.status)).length;
@@ -34,7 +38,7 @@ export default async function ManagerDashboard() {
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">{[["Open tasks", pending], ["Awaiting review", approvals], ["Overdue", overdue], ["Team members", employees.length]].map(([label, count]) => <article key={String(label)} className="panel-card rounded-2xl p-4"><p className="text-xs text-[var(--muted)]">{label}</p><p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{count}</p></article>)}</section>
       <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="panel-card rounded-2xl p-5"><p className="section-kicker">Team workload</p><h2 className="mt-1 text-base font-semibold text-[var(--foreground)]">Open tasks by employee</h2>
-          {workloads.length ? <div className="mt-4 grid gap-4">{workloads.map((employee) => { const max = Math.max(1, ...workloads.map((item) => item.open)); return <div key={employee.id}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="text-[var(--foreground)]">{employee.name || employee.email}</span><span className="text-[var(--muted)]">{employee.open} open{employee.late ? ` · ${employee.late} overdue` : ""}</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--panel-soft)]"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(2, employee.open / max * 100)}%` }} /></div></div>; })}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No active team members yet.</p>}
+          {workloads.length ? <div className="mt-4 grid gap-4">{workloads.map((employee) => { const max = Math.max(1, ...workloads.map((item) => item.open)); return <div key={employee.id}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="user-identity text-[var(--foreground)]"><UserAvatar name={employee.name || employee.email} src={employee.avatarUrl} size={28} />{employee.name || employee.email}</span><span className="text-[var(--muted)]">{employee.open} open{employee.late ? ` · ${employee.late} overdue` : ""}</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--panel-soft)]"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(2, employee.open / max * 100)}%` }} /></div></div>; })}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No active team members yet.</p>}
         </div>
         <QuickAssign employees={employees} />
       </section>

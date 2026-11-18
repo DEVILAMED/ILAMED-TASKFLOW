@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, ClipboardCheck, Clock3, Plus, TrendingUp, TriangleAlert, UsersRound } from "lucide-react";
 import { NewTaskButton } from "@/app/new-company-task-dialog";
+import ReviewQualityBadge from "@/app/review-quality-badge";
+import { MIN_REVIEWED_TASKS } from "@/lib/review-quality";
+import UserAvatar from "@/app/user-avatar";
 
 export type OverviewEmployee = {
   id: string;
   name: string;
   email: string;
+  avatarUrl?: string | null;
   designation: string;
   departmentId: string | null;
   departmentName: string;
@@ -16,10 +20,12 @@ export type OverviewEmployee = {
   completed: number;
   overdue: number;
   reviewScore?: number | null;
+  reviewTaskCount?: number;
 };
 
 type OverviewDashboardProps = {
   dateLabel?: string;
+  reviewPeriodLabel?: string;
   employees: OverviewEmployee[];
   departments: { id: string; name: string }[];
   counts: { employees: number; createdToday: number; inProgress: number; awaiting: number; overdue: number; completed: number; total: number };
@@ -64,7 +70,7 @@ function StatusChart({ distribution, total }: Pick<OverviewDashboardProps, "dist
   </svg></div>;
 }
 
-export default function OverviewDashboard({ employees, counts, distribution }: OverviewDashboardProps) {
+export default function OverviewDashboard({ employees, counts, distribution, reviewPeriodLabel = "Last 90 days" }: OverviewDashboardProps) {
   const metrics = [
     { label: "Employees", value: counts.employees, icon: TrendingUp, tone: "employees", href: "/admin/employees" },
     { label: "Created today", value: counts.createdToday, icon: Plus, tone: "created", href: "/admin?focus=CREATED_TODAY" },
@@ -90,16 +96,15 @@ export default function OverviewDashboard({ employees, counts, distribution }: O
     </section>
     <section className="overview-panel overview-performance" aria-labelledby="employee-performance-title">
       <div className="overview-table-heading"><h2 id="employee-performance-title" className="overview-panel-title">Employee Performance</h2><Link href="/admin/employees">VIEW ALL <ArrowRight size={12} aria-hidden="true" /></Link></div>
+      <p className="performance-context">Review quality: {reviewPeriodLabel}. At least {MIN_REVIEWED_TASKS} distinct reviewed tasks per employee. Current task totals are shown separately.</p>
       <div className="overview-table-scroll"><table className="overview-table">
-        <caption className="sr-only">Employee task performance. Review scores are average manager ratings out of five. Hours are unavailable when no time has been recorded.</caption>
+        <caption className="sr-only">Current employee task activity and review quality out of 100 for the last 90 days, using each submitter’s latest rated review per task. Hours are unavailable when no time has been recorded.</caption>
         <colgroup><col style={{ width: "14%" }} /><col style={{ width: "23%" }} />{["9%", "9%", "9%", "9%", "8%", "8%", "11%"].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-        <thead><tr>{["Employee", "Role", "Assigned", "Completed", "Pending", "Awaiting", "Overdue", "Hours", "Score"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+        <thead><tr>{["Employee", "Role", "Assigned", "Completed", "Pending", "Awaiting", "Overdue", "Hours", "Review quality"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
         <tbody>{employees.length ? employees.map((person) => {
-          const score = person.reviewScore;
-          const label = score == null ? null : score >= 4.5 ? "Excellent" : score >= 3.5 ? "Good" : "Needs review";
           return <tr key={person.id}>
-            <th scope="row"><Link href={`/admin?employee=${encodeURIComponent(person.id)}`}>{person.name}</Link></th>
-            <td className="overview-role">{person.designation}</td><td>{person.assigned}</td><td className="overview-completed">{person.completed}</td><td>{Math.max(0, person.active - person.awaiting)}</td><td>{person.awaiting}</td><td className="overview-overdue">{person.overdue}</td><td className="overview-hours"><span title="No time recorded">—</span></td><td>{score == null ? <span className="overview-unrated">—</span> : <span className={`overview-score ${score >= 4.5 ? "score-excellent" : score >= 3.5 ? "score-good" : "score-review"}`} title="Average manager review rating out of 5">{score.toFixed(1)} · {label}</span>}</td>
+            <th scope="row"><Link href={`/admin?employee=${encodeURIComponent(person.id)}`} className="user-identity"><UserAvatar name={person.name} src={person.avatarUrl} size={28} /><span>{person.name}</span></Link></th>
+            <td className="overview-role">{person.designation}</td><td>{person.assigned}</td><td className="overview-completed">{person.completed}</td><td>{Math.max(0, person.active - person.awaiting)}</td><td>{person.awaiting}</td><td className="overview-overdue">{person.overdue}</td><td className="overview-hours"><span title="No time recorded">—</span></td><td><Link href={`/performance?employee=${encodeURIComponent(person.id)}`}><ReviewQualityBadge score={person.reviewScore ?? null} ratedTaskCount={person.reviewTaskCount ?? 0} /></Link></td>
           </tr>;
         }) : <tr><td colSpan={9} className="overview-table-empty">No employees yet. <Link href="/admin/employees">Manage your team</Link></td></tr>}</tbody>
       </table></div>
