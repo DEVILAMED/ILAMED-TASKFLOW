@@ -5,8 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID, ensureCompanyTaskProject } from "@/services/company-tasks";
 import { parseCompanyTaskDetails, validateCompanyTaskDateRange } from "@/lib/company-task-management";
 import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
+import { companyTaskRepeatSelect, firstRepeatWorkday, nextCalendarDay, parseTaskRepeat, serializeTaskRepeat } from "@/lib/company-task-repeat";
+import { employeeDayKey } from "@/lib/company-workdays";
+import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
 
 const taskSelect = {
+  ...companyTaskRepeatSelect,
   id: true,
   title: true,
   description: true,
@@ -29,6 +33,8 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
+  await ensureDailyCompanyTasks();
+
   const managerTeams = user.role === UserRole.MANAGER
     ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })
     : [];
@@ -42,7 +48,7 @@ export async function GET() {
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
   });
 
-  return NextResponse.json({ ok: true, tasks: tasks.map(task => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null })) });
+  return NextResponse.json({ ok: true, tasks: tasks.map(task => ({ ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null })) });
 }
 
 export async function POST(request: Request) {
@@ -62,6 +68,8 @@ export async function POST(request: Request) {
     dueDate?: unknown;
     priority?: unknown;
     checklistItems?: unknown;
+    repeat?: unknown;
+    repeatUntil?: unknown;
   } | null;
   try {
     payload = await request.json();
@@ -99,12 +107,17 @@ export async function POST(request: Request) {
   const { startDate, dueDate } = details.data;
   const rangeError = validateCompanyTaskDateRange(startDate, dueDate);
   if (rangeError) return NextResponse.json({ ok: false, error: rangeError }, { status: 400 });
+  const repeat = parseTaskRepeat(payload ?? {});
+  if (!repeat.ok) return NextResponse.json({ ok: false, error: repeat.error }, { status: 400 });
+  if (repeat.daily && (startDate!.toISOString().slice(0, 10) < employeeDayKey() || startDate!.getTime() !== dueDate!.getTime() || (repeat.endDate && repeat.endDate < startDate!))) {
+    return NextResponse.json({ ok: false, error: "Daily tasks need a first date of today or later and a single-day deadline. The last repeat date must be on or after the first date." }, { status: 400 });
+  }
 
   const managerTeams = user.role === UserRole.MANAGER
     ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })
     : [];
   const assignee = await prisma.user.findFirst({
-    where: { id: assigneeId, role: { not: UserRole.ADMIN } },
+    where: { id: assigneeId, role: { not: UserRole.ADMIN }, isBlocked: false, OR: [{ employeeProfile: null }, { employeeProfile: { employmentStatus: { not: "INACTIVE" } } }] },
     select: { id: true },
   });
   if (!assignee) {
@@ -115,7 +128,20 @@ export async function POST(request: Request) {
   }
 
   const project = await ensureCompanyTaskProject(user.id);
+  let firstDate = startDate!;
+  if (repeat.daily) {
+    const leave = await prisma.employeeLeaveDay.findMany({ where: { employeeId: assignee.id, day: { gte: startDate! } }, select: { day: true } });
+    const firstDay = firstRepeatWorkday(startDate!.toISOString().slice(0, 10), repeat.endDate?.toISOString().slice(0, 10) ?? null, leave.map(item => item.day.toISOString().slice(0, 10)));
+    if (!firstDay) return NextResponse.json({ ok: false, error: "There are no working days in this repeat date range." }, { status: 400 });
+    firstDate = new Date(`${firstDay}T00:00:00Z`);
+  }
   const task = await prisma.$transaction(async (tx) => {
+    const recurrence = repeat.daily ? await tx.companyTaskRecurrence.create({ data: {
+      title, description: description || null, priority: priority as "LOW" | "MEDIUM" | "HIGH", checklistItems: checklistItems.map(item => item.trim()),
+      projectId: project.id, assigneeId: assignee.id, createdById: user.id, startDate: firstDate, endDate: repeat.endDate,
+      nextDate: new Date(`${nextCalendarDay(firstDate.toISOString().slice(0, 10))}T00:00:00Z`),
+      isActive: !repeat.endDate || firstDate < repeat.endDate,
+    } }) : null;
     const createdTask = await tx.task.create({
       data: {
         title,
@@ -123,8 +149,9 @@ export async function POST(request: Request) {
         issueType: "TASK",
         status: TaskStatus.TODO,
         priority: priority as "LOW" | "MEDIUM" | "HIGH",
-        startDate,
-        dueDate,
+        startDate: firstDate,
+        dueDate: repeat.daily ? firstDate : dueDate,
+        ...(recurrence ? { recurrenceId: recurrence.id, recurrenceDate: firstDate } : {}),
         projectId: project.id,
         assigneeId: assignee.id,
         checklistItems: {
@@ -153,5 +180,5 @@ export async function POST(request: Request) {
     return createdTask;
   });
 
-  return NextResponse.json({ ok: true, task: { ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null } }, { status: 201 });
+  return NextResponse.json({ ok: true, task: { ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null } }, { status: 201 });
 }

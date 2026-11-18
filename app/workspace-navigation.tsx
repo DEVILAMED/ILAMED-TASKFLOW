@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
 import { Activity, BarChart3, Bell, CalendarDays, CheckSquare, Columns3, Folder, LayoutDashboard, Star, Sun, UsersRound } from "lucide-react";
 import { getActiveWorkspaceNavHref, getWorkspaceNavItems, type WorkspaceNavItem, type WorkspaceRole } from "@/lib/workspace-navigation";
+import { departmentHref } from "@/lib/employee-departments";
 
 function NavIcon({ name }: { name: WorkspaceNavItem["icon"] }) {
   const props = { size: 16, strokeWidth: 1.6, "aria-hidden": true as const };
@@ -23,11 +24,13 @@ function NavIcon({ name }: { name: WorkspaceNavItem["icon"] }) {
   }
 }
 
-function NavigationItems({ role, workspace = "projects", activeHref, onNavigate }: { role: WorkspaceRole; workspace?: "personal" | "projects"; activeHref?: string; onNavigate?: (event: MouseEvent<HTMLAnchorElement>, href: string) => void }) {
+function NavigationItems({ role, workspace = "projects", activeHref, onNavigate, selectedDepartment = "ALL" }: { role: WorkspaceRole; workspace?: "personal" | "projects"; activeHref?: string; onNavigate?: (event: MouseEvent<HTMLAnchorElement>, href: string) => void; selectedDepartment?: string }) {
   return <nav aria-label="Main navigation" className="workspace-navigation">
-    {getWorkspaceNavItems(role, workspace).map((item) => <Link key={item.href} href={item.href} data-guide-link={item.href} aria-current={activeHref === item.href ? "page" : undefined} onClick={(event) => onNavigate?.(event, item.href)} className={`workspace-nav-item ${activeHref === item.href ? "workspace-nav-active" : ""}`}>
+    {getWorkspaceNavItems(role, workspace).map((item) => {
+      const href = role === "ADMIN" && item.href.startsWith("/admin") ? departmentHref(item.href, selectedDepartment) : item.href;
+      return <Link key={item.href} href={href} data-guide-link={item.href} aria-current={activeHref === item.href ? "page" : undefined} onClick={(event) => onNavigate?.(event, href)} className={`workspace-nav-item ${activeHref === item.href ? "workspace-nav-active" : ""}`}>
       <NavIcon name={item.icon} /><span className="min-w-0 flex-1">{item.label}</span>
-    </Link>)}
+    </Link>; })}
   </nav>;
 }
 
@@ -63,5 +66,5 @@ export default function WorkspaceNavigation({ role, workspace }: { role: Workspa
     event.currentTarget.closest<HTMLDetailsElement>("details.workspace-mobile-nav")?.removeAttribute("open");
   }
 
-  return <NavigationItems role={role} workspace={activeWorkspace} activeHref={activeHref} onNavigate={onNavigate} />;
+  return <NavigationItems role={role} workspace={activeWorkspace} activeHref={activeHref} onNavigate={onNavigate} selectedDepartment={new URLSearchParams(search).get("department") || "ALL"} />;
 }

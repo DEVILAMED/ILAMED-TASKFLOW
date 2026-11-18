@@ -25,7 +25,7 @@ export async function GET() {
     },
     orderBy: [{ dueDate: "asc" }, { updatedAt: "asc" }],
     select: {
-      id: true, title: true, description: true, dueDate: true,
+      id: true, title: true, description: true, dueDate: true, recurrenceDate: true,
       assignee: { select: USER_IDENTITY_SELECT },
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: {
         id: true, notes: true, createdAt: true, submittedBy: { select: USER_IDENTITY_SELECT },
@@ -36,6 +36,7 @@ export async function GET() {
   return NextResponse.json({ ok: true, tasks: tasks.map((task) => ({
     id: task.id, title: task.title, description: task.description, assignee: task.assignee ? withAvatarUrl(task.assignee) : null,
     dueDate: task.dueDate?.toISOString() ?? null,
+    recurrenceDate: task.recurrenceDate?.toISOString() ?? null,
     submission: task.submissions[0] ? {
       id: task.submissions[0].id, notes: task.submissions[0].notes, createdAt: task.submissions[0].createdAt.toISOString(),
       submitter: task.submissions[0].submittedBy.name || task.submissions[0].submittedBy.email,

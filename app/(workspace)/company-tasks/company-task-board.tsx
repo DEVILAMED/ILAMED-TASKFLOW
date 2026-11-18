@@ -11,6 +11,8 @@ import CompanyTaskEditor, { type CompanyTaskChanges } from "@/app/company-task-e
 import SubmissionImagePicker from "@/app/submission-image-picker";
 import TaskSubmissionHistory from "@/app/task-submission-history";
 import UserAvatar from "@/app/user-avatar";
+import CompanyTaskRepeatControl from "@/app/company-task-repeat-control";
+import type { CompanyTaskRepeatInfo } from "@/lib/company-task-repeat";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
 type TaskAction = TaskStatus | "REPORT_BLOCKER";
@@ -19,7 +21,7 @@ type TaskView = "list" | "board" | "calendar";
 type Employee = { id: string; name: string | null; email: string; avatarUrl?: string | null };
 type ChecklistItem = { id: string; title: string; isCompleted: boolean; position: number };
 type TaskComment = { id: string; content: string; createdAt: string; author: string; authorId: string; authorAvatarUrl?: string | null };
-type CompanyTask = {
+type CompanyTask = CompanyTaskRepeatInfo & {
   id: string;
   title: string;
   description: string | null;
@@ -427,6 +429,7 @@ export default function CompanyTaskBoard({
                     <tr>
                       <td className="max-w-[30rem] px-5 py-4">
                         <button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>
+                        {task.recurrenceId ? <span className="badge-pill ml-2 text-[10px]">Daily{task.recurrenceDate ? ` · ${task.recurrenceDate.slice(0, 10)}` : ""}</span> : null}
                         {task.description ? <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-white/40">{task.description}</p> : null}
                         {task.checklistItems.length ? (
                           <div className="mt-3 space-y-2">
@@ -543,6 +546,7 @@ export default function CompanyTaskBoard({
         <div className="flex items-start justify-between gap-4 border-b border-[var(--stroke)] p-5"><div><p className="text-xs text-[var(--muted)]">Task details</p><h2 id="task-detail-title" className="mt-1 text-xl font-semibold">{activeTask.title}</h2></div><button autoFocus type="button" onClick={() => dialogRef.current?.close()} className="secondary-button px-3 py-2">Close</button></div>
         {[activeTask].map((task) => <div key={task.id} className="space-y-5 p-5">
           {isAdmin ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} onDelete={() => deleteTask(task)} /> : null}
+          {isAdmin ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}
           <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatCompanyTaskSchedule(task.schedule)}</p>
           {task.schedule.dueDate !== taskDateKey(task.dueDate) ? <p className="text-xs text-[var(--muted)]">Original deadline {taskDateKey(task.dueDate)}. The displayed schedule accounts for Sundays and recorded leave.</p> : null}
           <TaskChecklistProgress title={task.title} items={task.checklistItems} />
@@ -626,7 +630,7 @@ function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
     {columns.map((column) => <section key={column.status} className="min-h-52 rounded-xl border border-[var(--stroke)] bg-[var(--panel-soft)] p-2.5">
       <div className="mb-2 flex items-center justify-between px-1"><h3 className="text-xs font-semibold text-[var(--foreground)]">{column.title}</h3><span className="rounded-md bg-[var(--panel)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">{tasks.filter((task) => column.matches.includes(task.status)).length}</span></div>
       <div className="grid content-start gap-2">{tasks.filter((task) => column.matches.includes(task.status)).map((task) => <article key={task.id} className="rounded-lg border border-[var(--stroke)] bg-[var(--panel)] p-3 shadow-sm">
-        <button type="button" onClick={() => onOpen(task)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
+        <button type="button" onClick={() => onOpen(task)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>{task.recurrenceId ? <span className="badge-pill ml-2 text-[10px]">Daily{task.recurrenceDate ? ` · ${task.recurrenceDate.slice(0, 10)}` : ""}</span> : null}{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
         <TaskChecklistProgress title={task.title} items={task.checklistItems} className="mt-3" />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatCompanyTaskSchedule(task.schedule)}</time> : null}</div>
         {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} size={24} /><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}

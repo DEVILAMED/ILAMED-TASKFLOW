@@ -6,6 +6,7 @@ import ReportDownloads from "./report-downloads";
 import { formatTaskDateRange } from "@/lib/task-dates";
 import { companyTaskSchedule, employeeDayKey, employeeLeaveDays, isCompanyTaskOverdue } from "@/lib/company-workdays";
 import { getLeaveForTasks } from "@/services/employee-leave";
+import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
 
 const STATUS_ROWS = [
   { key: "TODO", label: "Not started", color: "bg-slate-400" },
@@ -45,6 +46,7 @@ function employeeName(assignee: { name: string | null; email: string } | null) {
 export default async function ReportsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  await ensureDailyCompanyTasks();
 
   const managerMemberships = user.role === "MANAGER"
     ? await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } })

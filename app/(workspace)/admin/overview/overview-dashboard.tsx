@@ -4,6 +4,9 @@ import { NewTaskButton } from "@/app/new-company-task-dialog";
 import ReviewQualityBadge from "@/app/review-quality-badge";
 import { MIN_REVIEWED_TASKS } from "@/lib/review-quality";
 import UserAvatar from "@/app/user-avatar";
+import AdminDepartmentSwitcher from "@/app/admin-department-switcher";
+import EmployeeDepartmentControl from "@/app/employee-department-control";
+import { departmentHref } from "@/lib/employee-departments";
 
 export type OverviewEmployee = {
   id: string;
@@ -28,6 +31,7 @@ type OverviewDashboardProps = {
   reviewPeriodLabel?: string;
   employees: OverviewEmployee[];
   departments: { id: string; name: string }[];
+  selectedDepartment: string;
   counts: { employees: number; createdToday: number; inProgress: number; awaiting: number; overdue: number; completed: number; total: number };
   distribution: { label: string; count: number; color: string; href: string }[];
 };
@@ -70,7 +74,7 @@ function StatusChart({ distribution, total }: Pick<OverviewDashboardProps, "dist
   </svg></div>;
 }
 
-export default function OverviewDashboard({ employees, counts, distribution, reviewPeriodLabel = "Last 90 days" }: OverviewDashboardProps) {
+export default function OverviewDashboard({ employees, departments, selectedDepartment, counts, distribution, reviewPeriodLabel = "Last 90 days" }: OverviewDashboardProps) {
   const metrics = [
     { label: "Employees", value: counts.employees, icon: TrendingUp, tone: "employees", href: "/admin/employees" },
     { label: "Created today", value: counts.createdToday, icon: Plus, tone: "created", href: "/admin?focus=CREATED_TODAY" },
@@ -82,11 +86,12 @@ export default function OverviewDashboard({ employees, counts, distribution, rev
 
   return <div className="overview-dashboard">
     <section className="overview-page-heading">
-      <div><p className="overview-eyebrow">COMMAND CENTER</p><h1>Team Operations Dashboard</h1><p className="overview-description">Live overview of every employee, task and approval.</p></div>
+      <div><p className="overview-eyebrow">COMMAND CENTER</p><h1>Team Operations Dashboard</h1><p className="overview-description">{selectedDepartment === "ALL" ? "Live overview of every employee, task and approval." : `Viewing ${departments.find(department => department.id === selectedDepartment)?.name || "unassigned employees"}.`}</p></div>
       <NewTaskButton className="overview-new-task" />
     </section>
-    <section aria-label="Company totals" className="overview-metrics">
-      {metrics.map(({ label, value, icon: Icon, tone, href }) => <Link key={label} href={href} className={`overview-metric overview-metric-${tone}`}>
+    <AdminDepartmentSwitcher departments={departments} selectedDepartment={selectedDepartment} />
+    <section aria-label="Department totals" className="overview-metrics">
+      {metrics.map(({ label, value, icon: Icon, tone, href }) => <Link key={label} href={href.startsWith("/admin") ? departmentHref(href, selectedDepartment) : href} className={`overview-metric overview-metric-${tone}`}>
         <div><p className="overview-metric-label">{label}</p><p className="overview-metric-value">{value}</p></div><span className="overview-metric-icon"><Icon size={19} strokeWidth={1.8} aria-hidden="true" /></span>
       </Link>)}
     </section>
@@ -95,18 +100,18 @@ export default function OverviewDashboard({ employees, counts, distribution, rev
       <article className="overview-panel overview-status-panel"><h2 className="overview-panel-title">Status Distribution</h2><StatusChart distribution={distribution} total={counts.total} /></article>
     </section>
     <section className="overview-panel overview-performance" aria-labelledby="employee-performance-title">
-      <div className="overview-table-heading"><h2 id="employee-performance-title" className="overview-panel-title">Employee Performance</h2><Link href="/admin/employees">VIEW ALL <ArrowRight size={12} aria-hidden="true" /></Link></div>
+      <div className="overview-table-heading"><h2 id="employee-performance-title" className="overview-panel-title">Employee Performance</h2><Link href={departmentHref("/admin/employees", selectedDepartment)}>MANAGE EMPLOYEES <ArrowRight size={12} aria-hidden="true" /></Link></div>
       <p className="performance-context">Review quality: {reviewPeriodLabel}. At least {MIN_REVIEWED_TASKS} distinct reviewed tasks per employee. Current task totals are shown separately.</p>
       <div className="overview-table-scroll"><table className="overview-table">
         <caption className="sr-only">Current employee task activity and review quality out of 100 for the last 90 days, using each submitter’s latest rated review per task. Hours are unavailable when no time has been recorded.</caption>
-        <colgroup><col style={{ width: "14%" }} /><col style={{ width: "23%" }} />{["9%", "9%", "9%", "9%", "8%", "8%", "11%"].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-        <thead><tr>{["Employee", "Role", "Assigned", "Completed", "Pending", "Awaiting", "Overdue", "Hours", "Review quality"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+        <colgroup><col style={{ width: "14%" }} /><col style={{ width: "14%" }} /><col style={{ width: "17%" }} />{["7%", "8%", "7%", "7%", "7%", "7%", "12%"].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
+        <thead><tr>{["Employee", "Role", "Department", "Assigned", "Completed", "Pending", "Awaiting", "Overdue", "Hours", "Review quality"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
         <tbody>{employees.length ? employees.map((person) => {
           return <tr key={person.id}>
-            <th scope="row"><Link href={`/admin?employee=${encodeURIComponent(person.id)}`} className="user-identity"><UserAvatar name={person.name} src={person.avatarUrl} size={28} /><span>{person.name}</span></Link></th>
-            <td className="overview-role">{person.designation}</td><td>{person.assigned}</td><td className="overview-completed">{person.completed}</td><td>{Math.max(0, person.active - person.awaiting)}</td><td>{person.awaiting}</td><td className="overview-overdue">{person.overdue}</td><td className="overview-hours"><span title="No time recorded">—</span></td><td><Link href={`/performance?employee=${encodeURIComponent(person.id)}`}><ReviewQualityBadge score={person.reviewScore ?? null} ratedTaskCount={person.reviewTaskCount ?? 0} /></Link></td>
+            <th scope="row"><Link href={departmentHref(`/admin?employee=${encodeURIComponent(person.id)}`, selectedDepartment)} className="user-identity"><UserAvatar name={person.name} src={person.avatarUrl} size={28} /><span>{person.name}</span></Link></th>
+            <td className="overview-role">{person.designation}</td><td><EmployeeDepartmentControl employeeId={person.id} employeeName={person.name} departmentId={person.departmentId} departments={departments} showLabel={false} /></td><td>{person.assigned}</td><td className="overview-completed">{person.completed}</td><td>{Math.max(0, person.active - person.awaiting)}</td><td>{person.awaiting}</td><td className="overview-overdue">{person.overdue}</td><td className="overview-hours"><span title="No time recorded">—</span></td><td><Link href={`/performance?employee=${encodeURIComponent(person.id)}`}><ReviewQualityBadge score={person.reviewScore ?? null} ratedTaskCount={person.reviewTaskCount ?? 0} /></Link></td>
           </tr>;
-        }) : <tr><td colSpan={9} className="overview-table-empty">No employees yet. <Link href="/admin/employees">Manage your team</Link></td></tr>}</tbody>
+        }) : <tr><td colSpan={10} className="overview-table-empty">No employees in this department view. <Link href={departmentHref("/admin/employees#employees", selectedDepartment)}>Manage your team</Link></td></tr>}</tbody>
       </table></div>
     </section>
   </div>;

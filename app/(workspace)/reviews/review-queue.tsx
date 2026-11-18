@@ -9,6 +9,7 @@ import UserAvatar from "@/app/user-avatar";
 
 type ReviewTask = {
   id: string; title: string; description: string | null; dueDate: string | null;
+  recurrenceDate?: string | null;
   assignee: { name: string | null; email: string; avatarUrl?: string | null } | null;
   submission: { id: string; notes: string | null; createdAt: string; submitter: string; submitterAvatarUrl?: string | null; images: SubmissionImage[] } | null;
 };
@@ -81,6 +82,7 @@ export default function ReviewQueue() {
         <span className="text-xs text-white/40">{task.submission ? new Date(task.submission.createdAt).toLocaleString() : ""}</span>
       </div>
       {task.description ? <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{task.description}</p> : null}
+      {task.recurrenceDate ? <p className="mt-2 text-sm font-medium text-[var(--accent)]">Daily submission for {task.recurrenceDate.slice(0, 10)}</p> : null}
       {task.submission?.notes ? <p className="mt-3 rounded-xl bg-white/[0.04] p-3 text-sm text-white/65">{task.submission.notes}</p> : null}
       {task.submission ? <SubmissionImageGallery images={task.submission.images} /> : null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">

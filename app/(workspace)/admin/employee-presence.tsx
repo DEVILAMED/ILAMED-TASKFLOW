@@ -7,6 +7,7 @@ import EmployeeAccountEditor from "./employee-account-editor";
 import UserAvatar from "@/app/user-avatar";
 import ProfilePhotoUploader from "@/app/profile-photo-uploader";
 import EmployeeLeaveEditor from "./employee-leave-editor";
+import EmployeeDepartmentControl from "@/app/employee-department-control";
 
 type Employee = {
   id: string;
@@ -127,8 +128,9 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
                 <span className="text-white/35">{formatLastSeen(lastSeenAt, now)}</span>
               </p>
             </div>
-            {employee.role !== "ADMIN" ? <div className="flex flex-wrap items-center gap-4">
-              <EmployeeAccountEditor account={employee} onSaved={() => router.refresh()} />
+            <div className="flex flex-wrap items-center gap-4">
+              {employee.role !== "ADMIN" ? <EmployeeDepartmentControl employeeId={employee.id} employeeName={employee.name || employee.email} departmentId={employee.profile?.departmentId ?? null} departments={departments} /> : null}
+              {employee.role !== "ADMIN" ? <EmployeeAccountEditor account={employee} onSaved={() => router.refresh()} /> : null}
               <UserRoleControl
                 userId={employee.id}
                 role={employee.role}
@@ -136,9 +138,9 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
                 displayName={employee.name || employee.email}
                 isCurrentUser={employee.id === currentUserId}
               />
-            </div> : null}
             </div>
-            {employee.role !== "ADMIN" ? <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} departments={departments} managers={managers} onSaved={() => router.refresh()} /> : null}
+            </div>
+            {employee.role !== "ADMIN" ? <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} managers={managers} onSaved={() => router.refresh()} /> : null}
             {employee.role !== "ADMIN" ? <EmployeeLeaveEditor employeeId={employee.id} leaveDays={employee.leaveDays} today={today} /> : null}
             {employee.role !== "ADMIN" || employee.id === currentUserId ? <details className="mt-3 rounded-xl border border-[var(--stroke)] p-3"><summary className="cursor-pointer text-xs font-medium text-[var(--muted)]">Profile picture</summary><ProfilePhotoUploader userId={employee.id} name={employee.name || employee.email} avatarUrl={employee.avatarUrl ?? null} /></details> : null}
           </div>
@@ -150,15 +152,14 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
   );
 }
 
-function EmployeeProfileEditor({ employeeId, profile, departments, managers, onSaved }: {
-  employeeId: string; profile: EmployeeProfile | null; departments: DepartmentOption[]; managers: ManagerOption[]; onSaved: () => void;
+function EmployeeProfileEditor({ employeeId, profile, managers, onSaved }: {
+  employeeId: string; profile: EmployeeProfile | null; managers: ManagerOption[]; onSaved: () => void;
 }) {
   const [employeeCode, setEmployeeCode] = useState(profile?.employeeCode ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [designation, setDesignation] = useState(profile?.designation ?? "");
   const [joiningDate, setJoiningDate] = useState(profile?.joiningDate ?? "");
   const [employmentStatus, setEmploymentStatus] = useState<EmployeeProfile["employmentStatus"]>(profile?.employmentStatus ?? "ACTIVE");
-  const [departmentId, setDepartmentId] = useState(profile?.departmentId ?? "");
   const [managerId, setManagerId] = useState(profile?.managerId ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +170,7 @@ function EmployeeProfileEditor({ employeeId, profile, departments, managers, onS
     try {
       const response = await fetch(`/api/admin/users/${employeeId}/profile`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeCode, phone, designation, joiningDate: joiningDate || null, employmentStatus, departmentId: departmentId || null, managerId: managerId || null }),
+        body: JSON.stringify({ employeeCode, phone, designation, joiningDate: joiningDate || null, employmentStatus, managerId: managerId || null }),
       });
       const data = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !data.ok) throw new Error(data.error || "Unable to save the employee profile.");
@@ -186,7 +187,6 @@ function EmployeeProfileEditor({ employeeId, profile, departments, managers, onS
       <label className="grid gap-1 text-[11px] text-white/45">Designation<input maxLength={100} value={designation} onChange={(event) => setDesignation(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
       <label className="grid gap-1 text-[11px] text-white/45">Joining date<input type="date" value={joiningDate} onChange={(event) => setJoiningDate(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
       <label className="grid gap-1 text-[11px] text-white/45">Employment status<select value={employmentStatus} onChange={(event) => setEmploymentStatus(event.target.value as EmployeeProfile["employmentStatus"])} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option></select></label>
-      <label className="grid gap-1 text-[11px] text-white/45">Department<select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="">Unassigned</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
       <label className="grid gap-1 text-[11px] text-white/45 sm:col-span-2">Reporting manager<select value={managerId} onChange={(event) => setManagerId(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="">Unassigned</option>{managers.filter((manager) => manager.id !== employeeId).map((manager) => <option key={manager.id} value={manager.id}>{manager.name || manager.email}</option>)}</select></label>
       <div className="flex items-end gap-3"><button disabled={pending} className="secondary-button h-9 px-3 text-xs font-semibold disabled:opacity-50">{pending ? "Saving…" : "Save profile"}</button>{saved ? <span role="status" className="pb-2 text-xs text-emerald-300">Saved</span> : null}</div>
       {error ? <p role="alert" className="text-xs text-rose-300 sm:col-span-2">{error}</p> : null}

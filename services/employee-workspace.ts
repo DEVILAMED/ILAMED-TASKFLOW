@@ -1,11 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
+import { companyTaskRepeatSelect, serializeTaskRepeat } from "@/lib/company-task-repeat";
+import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
 
 export async function getEmployeeWorkspaceData(userId: string) {
+  await ensureDailyCompanyTasks();
   const where = { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: userId };
   const [tasks, feedback, profile] = await Promise.all([
     prisma.task.findMany({ where, select: {
+      ...companyTaskRepeatSelect,
       id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, createdAt: true, updatedAt: true,
       assignee: { select: USER_IDENTITY_SELECT },
       checklistItems: { orderBy: { position: "asc" }, select: { id: true, title: true, isCompleted: true, position: true } },
@@ -17,7 +21,7 @@ export async function getEmployeeWorkspaceData(userId: string) {
     prisma.employeeProfile.findUnique({ where: { userId }, select: { designation: true, department: { select: { name: true } } } }),
   ]);
   return {
-    tasks: tasks.map(task => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null })),
+    tasks: tasks.map(task => ({ ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null })),
     feedback: feedback.map(review => ({ ...review, reviewer: withAvatarUrl(review.reviewer) })),
     profile,
   };

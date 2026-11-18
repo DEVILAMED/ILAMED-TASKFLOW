@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import type { CompanyTaskRepeatInfo } from "@/lib/company-task-repeat";
 
 type Employee = { id: string; name: string | null; email: string };
-type EditableTask = { id: string; title: string; description: string | null; startDate: string | null; dueDate: string | null; priority: "LOW" | "MEDIUM" | "HIGH"; assignee: Employee | null };
+type EditableTask = CompanyTaskRepeatInfo & { id: string; title: string; description: string | null; startDate: string | null; dueDate: string | null; priority: "LOW" | "MEDIUM" | "HIGH"; assignee: Employee | null };
 export type CompanyTaskChanges = { title?: string; description?: string; startDate?: string | null; dueDate?: string | null; priority?: "LOW" | "MEDIUM" | "HIGH"; assigneeId?: string | null };
 
 export default function CompanyTaskEditor({ task, employees, pending, onSave, onDelete }: {
@@ -44,6 +45,7 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
       </div> : null}
       {editingTask ? <form onSubmit={(event) => void submit(event)} className="workspace-task-form">
         <h3 className="field-wide text-sm font-semibold">Edit task</h3>
+        {task.recurrenceId ? <p className="field-wide text-xs text-[var(--muted)]">Edits affect this task only. Future daily tasks use the original instructions and assignee. Stop daily repeat and create a new schedule to change future tasks.</p> : null}
         <label className="workspace-field field-wide">Title<input name="title" required minLength={2} maxLength={200} defaultValue={editingTask.title} disabled={pending} /></label>
         <label className="workspace-field field-wide">Description<textarea name="description" rows={3} maxLength={2000} defaultValue={editingTask.description ?? ""} disabled={pending} /></label>
         <fieldset className="field-wide grid gap-3 sm:grid-cols-2"><legend className="mb-2 text-sm font-medium">Task date range</legend>
@@ -61,6 +63,7 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
       {confirmDelete ? <div className="space-y-3" role="group" aria-label="Confirm task deletion">
         <h3 className="text-sm font-semibold">Delete &ldquo;{task.title}&rdquo;?</h3>
         <p className="text-sm text-[var(--muted)]">This permanently removes the task, checklist, comments, submissions, and reviews. This cannot be undone.</p>
+        {task.recurrenceId ? <p className="text-sm text-[var(--muted)]">This deletes only this day&apos;s task. Choose Stop daily repeat first to prevent future tasks.</p> : null}
         <div className="flex flex-wrap gap-3"><button type="button" disabled={pending} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-50" aria-busy={pending} onClick={() => void onDelete()}>{pending ? "Deleting..." : "Delete permanently"}</button><button type="button" disabled={pending} className="secondary-button rounded-lg px-3 py-2 text-sm" onClick={() => setConfirmDelete(false)}>Keep task</button></div>
       </div> : null}
     </section>

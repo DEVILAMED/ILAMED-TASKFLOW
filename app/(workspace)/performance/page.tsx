@@ -8,10 +8,12 @@ import { getReviewPeriod, summarizeReviewQuality } from "@/lib/review-quality";
 import PerformanceView from "@/app/performance-view";
 import { USER_IDENTITY_SELECT, userAvatarUrl } from "@/lib/user-avatar";
 import { getEmployeeLeave } from "@/services/employee-leave";
+import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
 
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<{ employee?: string; period?: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  await ensureDailyCompanyTasks();
   const params = await searchParams;
   const memberIds = await companyReportingEmployeeIds(user);
   const personal = user.role === "USER";

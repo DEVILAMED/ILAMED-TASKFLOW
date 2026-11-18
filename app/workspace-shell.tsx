@@ -29,7 +29,8 @@ type WorkspaceShellProps = {
   userDesignation?: string;
   userAction?: ReactNode;
   topbarRight?: ReactNode;
-  taskEmployees?: { id: string; name: string | null; email: string }[];
+  taskEmployees?: { id: string; name: string | null; email: string; employeeProfile?: { departmentId: string | null } | null }[];
+  taskDepartments?: { id: string; name: string }[];
   children: ReactNode;
 };
 
@@ -39,7 +40,7 @@ function Brand() {
   </Link>;
 }
 
-export function WorkspaceShell({ title, currentWorkspace, userName, userId, userEmail, userRole, userAvatarUrl, userDesignation, userAction, topbarRight, taskEmployees = [], children }: WorkspaceShellProps) {
+export function WorkspaceShell({ title, currentWorkspace, userName, userId, userEmail, userRole, userAvatarUrl, userDesignation, userAction, topbarRight, taskEmployees = [], taskDepartments = [], children }: WorkspaceShellProps) {
   const pathname = usePathname();
   const accountMenu = useRef<HTMLDetailsElement>(null);
   const mobileMenu = useRef<HTMLDetailsElement>(null);
@@ -74,7 +75,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userId, user
 
   return <div className="workspace-theme min-h-screen lg:flex">
     <PresenceHeartbeat />
-    {activeWorkspace === "projects" && userRole !== "USER" ? <Suspense fallback={null}><NewCompanyTaskDialog employees={taskEmployees} /></Suspense> : null}
+    {activeWorkspace === "projects" && userRole !== "USER" ? <Suspense fallback={null}><NewCompanyTaskDialog employees={taskEmployees} departments={taskDepartments} /></Suspense> : null}
     <a href="#workspace-main" className="workspace-skip-link">Skip to content</a>
     <aside className="workspace-sidebar hidden shrink-0 lg:sticky lg:top-0 lg:flex lg:h-screen" data-guide="sidebar">
       <Brand />

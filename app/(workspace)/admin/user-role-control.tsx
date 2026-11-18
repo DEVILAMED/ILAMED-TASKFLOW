@@ -96,7 +96,7 @@ export default function UserRoleControl({
         <label className="flex items-center gap-3 text-xs text-white/45">
           Role
           <select
-            aria-label={`Role for ${userId}`}
+            aria-label={`Role for ${displayName}`}
             aria-busy={isPending}
             className="soft-input h-10 rounded-xl px-3 text-sm"
             value={role}
@@ -109,7 +109,7 @@ export default function UserRoleControl({
           </select>
         </label>
       )}
-      {!isCurrentUser ? (
+      {!isCurrentUser && role !== "ADMIN" ? (
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -129,7 +129,7 @@ export default function UserRoleControl({
           </button>
         </div>
       ) : null}
-      {!isCurrentUser && isBlocked ? <p className="text-xs text-amber-200/75">Login blocked</p> : null}
+      {!isCurrentUser && role !== "ADMIN" && isBlocked ? <p className="text-xs text-amber-200/75">Login blocked</p> : null}
       {error ? <p role="alert" className="text-xs text-red-300">{error}</p> : null}
     </div>
   );

@@ -30,10 +30,10 @@
 .overview-table-heading { display: flex; height: 64px; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px; }
 .overview-table-heading > a { display: inline-flex; align-items: center; gap: 7px; color: #573cff; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; }
 .overview-table-scroll { overflow-x: auto; }
-.overview-table { width: 100%; min-width: 950px; border-collapse: collapse; table-layout: fixed; font-size: 14px; font-variant-numeric: tabular-nums; }
+.overview-table { width: 100%; min-width: 1150px; border-collapse: collapse; table-layout: fixed; font-size: 14px; font-variant-numeric: tabular-nums; }
 .overview-table thead { height: 45px; border-top: 1px solid var(--stroke); border-bottom: 1px solid var(--stroke); background: var(--panel-soft); }
 .overview-table thead th { padding: 10px 12px; color: var(--muted); font-family: var(--font-mono); font-size: 9px; font-weight: 400; letter-spacing: 0.07em; text-align: center; text-transform: uppercase; }
-.overview-table thead th:nth-child(-n+2) { text-align: left; }
+.overview-table thead th:nth-child(-n+3) { text-align: left; }
 .overview-table tbody tr { height: 47px; border-bottom: 1px solid var(--stroke); }
 .overview-table tbody tr:last-child { border-bottom: 0; }
 .overview-table tbody tr:hover { background: var(--panel-soft); }

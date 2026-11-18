@@ -11,6 +11,7 @@ import { companyTaskAccessWhere } from "@/lib/company-task-access";
 import { MAX_SUBMISSION_BODY_BYTES, validateSubmissionImages } from "@/lib/submission-images";
 import { readLimitedFormData, UploadTooLargeError } from "@/lib/limited-form-data";
 import { InvalidSubmissionImageError, prepareSubmissionImage } from "@/lib/prepare-submission-image";
+import { companyTaskRepeatSelect, serializeTaskRepeat } from "@/lib/company-task-repeat";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -160,6 +161,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         ...(nextAssigneeId === undefined ? {} : { assigneeId: nextAssigneeId }),
       },
       select: {
+        ...companyTaskRepeatSelect,
         id: true,
         title: true,
         description: true,
@@ -273,7 +275,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: task.rangeError }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, task: { ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null } });
+  return NextResponse.json({ ok: true, task: { ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null } });
 }
 
 export async function DELETE(_request: Request, { params }: RouteContext) {

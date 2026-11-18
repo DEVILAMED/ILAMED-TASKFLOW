@@ -10,12 +10,16 @@ import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 import UserAvatar from "@/app/user-avatar";
 import { getEmployeeLeave } from "@/services/employee-leave";
 import { companyTaskSchedule, employeeDayKey, employeeLeaveDays, isCompanyTaskOverdue } from "@/lib/company-workdays";
+import { companyTaskRepeatSelect, serializeTaskRepeat } from "@/lib/company-task-repeat";
+import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
+import CompanyTaskRepeatControl from "@/app/company-task-repeat-control";
 
 export default async function ManagerDashboard() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role === "ADMIN") redirect("/admin");
   if (user.role !== "MANAGER") redirect("/company-tasks");
+  await ensureDailyCompanyTasks();
   const memberships = await prisma.teamMembership.findMany({ where: { userId: user.id, role: "MANAGER" }, select: { teamId: true } });
   const teamIds = memberships.map((item) => item.teamId);
   const members = teamIds.length ? await prisma.teamMembership.findMany({ where: { teamId: { in: teamIds } }, select: { userId: true } }) : [];
@@ -23,11 +27,12 @@ export default async function ManagerDashboard() {
   const employeeIds = [...new Set([...memberIds, user.id])];
   const [employeeRows, taskRows, leaveByEmployee] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: memberIds }, role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: USER_IDENTITY_SELECT }),
-    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: USER_IDENTITY_SELECT } } }),
+    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { ...companyTaskRepeatSelect, id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: USER_IDENTITY_SELECT } } }),
     getEmployeeLeave(employeeIds),
   ]);
   const employees = employeeRows.map(withAvatarUrl);
-  const tasks = taskRows.map(task => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null }));
+  const tasks = taskRows.map(task => ({ ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null }));
+  const dailySchedules = [...new Map(tasks.filter(task => task.recurrenceId).map(task => [task.recurrenceId, task])).values()];
   const today = employeeDayKey();
   const terminal = (status: string) => ["APPROVED", "DONE", "CANCELLED", "REJECTED"].includes(status);
   const pending = tasks.filter((task) => !terminal(task.status)).length;
@@ -49,6 +54,7 @@ export default async function ManagerDashboard() {
         <QuickAssign employees={employees} />
       </section>
       <TeamTaskControls tasks={scheduledTasks.filter((task) => task.assigneeId !== user.id)} />
+      <details className="panel-card rounded-2xl p-5"><summary className="cursor-pointer text-sm font-medium">Daily task schedules</summary><div className="mt-3 grid gap-3">{dailySchedules.map(task => <div key={task.id}><h3 className="text-sm font-medium">{task.title}</h3><CompanyTaskRepeatControl task={task} /></div>)}{!dailySchedules.length ? <p className="text-sm text-[var(--muted)]">Choose Daily when assigning a task to set up daily submissions.</p> : null}</div></details>
       <section className="panel-card rounded-2xl p-5"><div className="flex items-center justify-between"><div><p className="section-kicker">Schedule</p><h2 className="mt-1 text-base font-semibold text-[var(--foreground)]">Upcoming team work</h2></div><Link href="/company-tasks" className="text-xs font-medium text-[var(--accent)]">View my tasks</Link></div>
         {dueSoon.length ? <div className="mt-3 divide-y divide-[var(--stroke)]">{dueSoon.map((task) => <div key={task.id} className="flex flex-wrap justify-between gap-3 py-3"><div><p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{task.assignee?.name || task.assignee?.email} · {task.status.replaceAll("_", " ").toLowerCase()}</p></div><time className="text-xs text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</time></div>)}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No upcoming scheduled work in your teams.</p>}
       </section>
