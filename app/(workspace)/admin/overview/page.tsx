@@ -9,6 +9,8 @@ import { getReviewMonths, getReviewPeriod, MIN_REVIEWED_TASKS, summarizeReviewQu
 import { getReviewEvidence } from "@/services/review-quality";
 import ReviewQualityBadge from "@/app/review-quality-badge";
 import { withAvatarUrl } from "@/lib/user-avatar";
+import { getEmployeeLeave } from "@/services/employee-leave";
+import { companyTaskSchedule, employeeLeaveDays, isCompanyTaskOverdue } from "@/lib/company-workdays";
 
 export default async function AdminOverviewPage() {
   const currentUser = await getCurrentUser();
@@ -30,6 +32,7 @@ export default async function AdminOverviewPage() {
       where: { projectId: COMPANY_TASK_PROJECT_ID },
       select: {
         id: true,
+        assigneeId: true,
         title: true,
         description: true,
         status: true,
@@ -51,13 +54,14 @@ export default async function AdminOverviewPage() {
     prisma.taskStatusHistory.findMany({ where: { task: { projectId: COMPANY_TASK_PROJECT_ID } }, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, actor: { select: { name: true, email: true } }, task: { select: { title: true } } } }),
   ]);
   const users = userRows.map(withAvatarUrl);
+  const leaveByEmployee = await getEmployeeLeave([...users.map(user => user.id), ...reviews.map(review => review.employeeId), ...tasks.flatMap(task => task.assigneeId ? [task.assigneeId] : [])]);
 
   const dateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
   const today = dateFormatter.format(now);
   const terminal = (status: string) => ["DONE", "APPROVED", "REJECTED", "CANCELLED"].includes(status);
   const completed = tasks.filter((task) => task.status === "DONE" || task.status === "APPROVED").length;
   const inProgress = tasks.filter((task) => task.status === "IN_PROGRESS").length;
-  const overdue = tasks.filter((task) => !terminal(task.status) && task.dueDate && task.dueDate.toISOString().slice(0, 10) < today).length;
+  const overdue = tasks.filter(task => isCompanyTaskOverdue(task, today, leaveByEmployee)).length;
   const awaitingReview = tasks.filter((task) => task.status === "SUBMITTED_FOR_REVIEW").length;
   const activeEmployees = users.filter((employee) => !employee.isBlocked && employee.employeeProfile?.employmentStatus !== "INACTIVE").length;
   const departmentStats = departments.map((department) => {
@@ -65,10 +69,12 @@ export default async function AdminOverviewPage() {
     const departmentCompleted = departmentTasks.filter((task) => task.status === "APPROVED" || task.status === "DONE").length;
     return { ...department, taskCount: departmentTasks.length, completed: departmentCompleted, completion: departmentTasks.length ? Math.round(departmentCompleted / departmentTasks.length * 100) : null };
   });
-  const upcomingTasks = tasks.filter((task) => !terminal(task.status) && task.dueDate && task.dueDate.toISOString().slice(0, 10) >= today)
-    .sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime()).slice(0, 5);
-  const trend = reviewMonths.map(month => ({ ...month, quality: summarizeReviewQuality(reviews, month) }));
-  const qualityByEmployee = new Map(summarizeReviewQuality(reviews, period).employees.map(person => [person.employeeId, person]));
+  const upcomingTasks = tasks.filter(task => !terminal(task.status))
+    .map(task => ({ ...task, ...companyTaskSchedule(task, employeeLeaveDays(leaveByEmployee, task.assigneeId)) }))
+    .filter(task => task.dueDate && task.dueDate >= today)
+    .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!)).slice(0, 5);
+  const trend = reviewMonths.map(month => ({ ...month, quality: summarizeReviewQuality(reviews, month, leaveByEmployee) }));
+  const qualityByEmployee = new Map(summarizeReviewQuality(reviews, period, leaveByEmployee).employees.map(person => [person.employeeId, person]));
   const evidencePeople = users.flatMap(person => {
     const quality = qualityByEmployee.get(person.id);
     return quality ? [{ ...quality, label: person.name || person.email, avatarUrl: person.avatarUrl }] : [];
@@ -87,7 +93,7 @@ export default async function AdminOverviewPage() {
       inProgress: assigned.filter((task) => task.status === "IN_PROGRESS").length,
       awaiting: assigned.filter((task) => task.status === "SUBMITTED_FOR_REVIEW").length,
       completed: assigned.filter((task) => task.status === "DONE" || task.status === "APPROVED").length,
-      overdue: assigned.filter((task) => !terminal(task.status) && task.dueDate && task.dueDate.toISOString().slice(0, 10) < today).length,
+      overdue: assigned.filter(task => isCompanyTaskOverdue(task, today, leaveByEmployee)).length,
     };
   });
   const distribution = [

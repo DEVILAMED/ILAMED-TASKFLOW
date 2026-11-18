@@ -15,7 +15,7 @@ export async function getReviewEvidence(window: ReviewWindow, employeeIds?: read
     select: {
       id: true, rating: true, decision: true, createdAt: true, feedback: true,
       reviewer: { select: { name: true, email: true } },
-      submission: { select: { taskId: true, task: { select: { title: true } }, submittedById: true, submittedBy: { select: USER_IDENTITY_SELECT } } },
+      submission: { select: { taskId: true, createdAt: true, task: { select: { title: true } }, submittedById: true, submittedBy: { select: USER_IDENTITY_SELECT } } },
     },
   });
   return reviews.map(review => ({
@@ -23,6 +23,7 @@ export async function getReviewEvidence(window: ReviewWindow, employeeIds?: read
     rating: review.rating,
     decision: review.decision,
     createdAt: review.createdAt,
+    submittedAt: review.submission.createdAt,
     taskId: review.submission.taskId,
     employeeId: review.submission.submittedById,
     employeeName: review.submission.submittedBy.name || review.submission.submittedBy.email,

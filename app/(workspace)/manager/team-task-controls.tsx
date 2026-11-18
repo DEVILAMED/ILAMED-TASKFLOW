@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatTaskDateRange } from "@/lib/task-dates";
+import { formatCompanyTaskSchedule } from "@/lib/company-workdays";
 import TaskChecklistProgress from "@/app/task-checklist-progress";
 import UserAvatar from "@/app/user-avatar";
 
@@ -11,8 +11,9 @@ type TeamTask = {
   title: string;
   description: string | null;
   status: string;
-  startDate: Date | string | null;
-  dueDate: Date | string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  workingDays: number | null;
   checklistItems: { isCompleted: boolean }[];
   assignee: { name: string | null; email: string; avatarUrl?: string | null } | null;
   comments: { id: string; content: string }[];
@@ -64,7 +65,7 @@ export default function TeamTaskControls({ tasks }: { tasks: TeamTask[] }) {
         <div><h3 className="text-sm font-medium">{task.title}</h3><p className="user-identity mt-1 text-xs text-[var(--muted)]">{task.assignee ? <UserAvatar name={task.assignee.name || task.assignee.email} src={task.assignee.avatarUrl} size={24} /> : null}{task.assignee?.name || task.assignee?.email} / {task.status.replaceAll("_", " ").toLowerCase()}</p></div>
         {["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED", "ON_HOLD"].includes(task.status) ? <button type="button" disabled={pending} onClick={() => void changeStatus(task)} className={`${task.status === "ON_HOLD" ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{task.status === "ON_HOLD" ? "Resume task" : "Put on hold"}</button> : null}
       </div>
-      <p className="mt-2 text-xs text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</p>
+      <p className="mt-2 text-xs text-[var(--muted)]">{formatCompanyTaskSchedule(task)}</p>
       <TaskChecklistProgress title={task.title} items={task.checklistItems} className="mt-3 max-w-xs" />
       {task.description ? <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">{task.description}</p> : null}
       {task.comments.map((comment) => <p key={comment.id} className="mt-2 whitespace-pre-wrap rounded-lg bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted)]">{comment.content}</p>)}

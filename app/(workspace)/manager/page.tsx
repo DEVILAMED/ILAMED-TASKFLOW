@@ -8,6 +8,8 @@ import QuickAssign from "./quick-assign";
 import { formatTaskDateRange } from "@/lib/task-dates";
 import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 import UserAvatar from "@/app/user-avatar";
+import { getEmployeeLeave } from "@/services/employee-leave";
+import { companyTaskSchedule, employeeDayKey, employeeLeaveDays, isCompanyTaskOverdue } from "@/lib/company-workdays";
 
 export default async function ManagerDashboard() {
   const user = await getCurrentUser();
@@ -19,19 +21,23 @@ export default async function ManagerDashboard() {
   const members = teamIds.length ? await prisma.teamMembership.findMany({ where: { teamId: { in: teamIds } }, select: { userId: true } }) : [];
   const memberIds = [...new Set(members.map((item) => item.userId).filter((id) => id !== user.id))];
   const employeeIds = [...new Set([...memberIds, user.id])];
-  const [employeeRows, taskRows] = await Promise.all([
+  const [employeeRows, taskRows, leaveByEmployee] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: memberIds }, role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: USER_IDENTITY_SELECT }),
     prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: USER_IDENTITY_SELECT } } }),
+    getEmployeeLeave(employeeIds),
   ]);
   const employees = employeeRows.map(withAvatarUrl);
   const tasks = taskRows.map(task => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null }));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = employeeDayKey();
   const terminal = (status: string) => ["APPROVED", "DONE", "CANCELLED", "REJECTED"].includes(status);
   const pending = tasks.filter((task) => !terminal(task.status)).length;
   const approvals = tasks.filter((task) => task.status === "SUBMITTED_FOR_REVIEW").length;
-  const overdue = tasks.filter((task) => !terminal(task.status) && task.dueDate && task.dueDate.toISOString().slice(0, 10) < today).length;
-  const dueSoon = tasks.filter((task) => !terminal(task.status) && task.dueDate && task.dueDate.toISOString().slice(0, 10) >= today).slice(0, 6);
-  const workloads = employees.map((employee) => ({ ...employee, open: tasks.filter((task) => task.assigneeId === employee.id && !terminal(task.status)).length, late: tasks.filter((task) => task.assigneeId === employee.id && !terminal(task.status) && task.dueDate && task.dueDate.toISOString().slice(0, 10) < today).length })).sort((a, b) => b.open - a.open);
+  const overdueTasks = tasks.filter(task => isCompanyTaskOverdue(task, today, leaveByEmployee));
+  const overdue = overdueTasks.length;
+  const scheduledTasks = tasks.map(task => ({ ...task, ...companyTaskSchedule(task, employeeLeaveDays(leaveByEmployee, task.assigneeId)) }));
+  const dueSoon = scheduledTasks.filter(task => !terminal(task.status) && task.dueDate && task.dueDate >= today)
+    .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!)).slice(0, 6);
+  const workloads = employees.map((employee) => ({ ...employee, open: tasks.filter((task) => task.assigneeId === employee.id && !terminal(task.status)).length, late: overdueTasks.filter(task => task.assigneeId === employee.id).length })).sort((a, b) => b.open - a.open);
   return <>
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <section className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-[var(--accent)]">Your teams</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--foreground)]">Welcome back, {user.name || "there"}</h2><p className="mt-1 text-sm text-[var(--muted)]">Keep team work moving and review submitted deliverables.</p></div><Link href="/reviews" className="accent-button px-4 py-2.5 text-sm font-medium">Review submissions{approvals ? ` · ${approvals}` : ""}</Link></section>
@@ -42,7 +48,7 @@ export default async function ManagerDashboard() {
         </div>
         <QuickAssign employees={employees} />
       </section>
-      <TeamTaskControls tasks={tasks.filter((task) => task.assigneeId !== user.id)} />
+      <TeamTaskControls tasks={scheduledTasks.filter((task) => task.assigneeId !== user.id)} />
       <section className="panel-card rounded-2xl p-5"><div className="flex items-center justify-between"><div><p className="section-kicker">Schedule</p><h2 className="mt-1 text-base font-semibold text-[var(--foreground)]">Upcoming team work</h2></div><Link href="/company-tasks" className="text-xs font-medium text-[var(--accent)]">View my tasks</Link></div>
         {dueSoon.length ? <div className="mt-3 divide-y divide-[var(--stroke)]">{dueSoon.map((task) => <div key={task.id} className="flex flex-wrap justify-between gap-3 py-3"><div><p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{task.assignee?.name || task.assignee?.email} · {task.status.replaceAll("_", " ").toLowerCase()}</p></div><time className="text-xs text-[var(--muted)]">{formatTaskDateRange(task.startDate, task.dueDate)}</time></div>)}</div> : <p className="mt-4 text-sm text-[var(--muted)]">No upcoming scheduled work in your teams.</p>}
       </section>

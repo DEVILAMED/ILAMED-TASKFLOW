@@ -12,7 +12,7 @@ export async function getEmployeeWorkspaceData(userId: string) {
     }, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }] }),
     prisma.taskReview.findMany({ where: { submission: { submittedById: userId, task: { projectId: COMPANY_TASK_PROJECT_ID } } }, orderBy: { createdAt: "desc" }, select: {
       id: true, decision: true, feedback: true, rating: true, createdAt: true,
-      reviewer: { select: USER_IDENTITY_SELECT }, submission: { select: { task: { select: { id: true, title: true } } } },
+      reviewer: { select: USER_IDENTITY_SELECT }, submission: { select: { createdAt: true, task: { select: { id: true, title: true } } } },
     } }),
     prisma.employeeProfile.findUnique({ where: { userId }, select: { designation: true, department: { select: { name: true } } } }),
   ]);

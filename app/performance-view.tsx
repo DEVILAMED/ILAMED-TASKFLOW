@@ -3,10 +3,11 @@ import { employeeDayKey, summarizeEmployeeWork } from "@/lib/employee-dashboard"
 import { MIN_REVIEWED_TASKS, REVIEW_PERIODS, REVIEW_RUBRIC, type ReviewEvidenceDetail, type ReviewPeriod, type ReviewQualitySummary } from "@/lib/review-quality";
 import ReviewQualityBadge from "@/app/review-quality-badge";
 import UserAvatar from "@/app/user-avatar";
+import { countCompanyWorkdays, employeeLeaveDays, type LeaveDaysByEmployee } from "@/lib/company-workdays";
 
-type Task = { status: string; priority: string; dueDate: Date | string | null; assigneeId: string | null };
+type Task = { status: string; priority: string; startDate?: Date | string | null; dueDate: Date | string | null; assigneeId: string | null };
 
-export default function PerformanceView({ title, description, personal = false, employee, tasks, quality, period, reviews, avatarUrl }: {
+export default function PerformanceView({ title, description, personal = false, employee, tasks, quality, period, reviews, avatarUrl, leaveByEmployee }: {
   title: string;
   description: string;
   personal?: boolean;
@@ -16,8 +17,10 @@ export default function PerformanceView({ title, description, personal = false, 
   quality: ReviewQualitySummary;
   period: ReviewPeriod;
   reviews: ReviewEvidenceDetail[];
+  leaveByEmployee: LeaveDaysByEmployee;
 }) {
-  const summary = summarizeEmployeeWork(tasks, employeeDayKey());
+  const summary = summarizeEmployeeWork(tasks, employeeDayKey(), leaveByEmployee);
+  const workingDays = employee ? countCompanyWorkdays(period.startDay, period.endDay, employeeLeaveDays(leaveByEmployee, employee)) : null;
   const isTeam = !employee;
   const { score } = quality;
   const latestReviewIds = new Set(quality.latestReviewIds);
@@ -40,7 +43,7 @@ export default function PerformanceView({ title, description, personal = false, 
   return <div className={`workspace-view ${personal ? "employee-performance" : ""}`}>
     <WorkspacePageHeading kicker="WORK QUALITY & ACTIVITY" title={title} description={description} action={employee ? <UserAvatar name={title} src={avatarUrl} size={48} /> : undefined} />
     <section className="workspace-surface performance-period">
-      <div><h2>Review period</h2><p>{period.startDay} to {period.endDay} · India time</p></div>
+      <div><h2>Review period</h2><p>{period.startDay} to {period.endDay} · India time</p>{workingDays !== null ? <p>{workingDays} working {workingDays === 1 ? "day" : "days"} in this period</p> : null}</div>
       <form action="/performance" method="get">
         {employee ? <input type="hidden" name="employee" value={employee} /> : null}
         <label className="workspace-field">Review window<select name="period" defaultValue={period.value} className="soft-input">{REVIEW_PERIODS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -80,7 +83,7 @@ export default function PerformanceView({ title, description, personal = false, 
       </section>
     </div>
     <section className="workspace-surface"><h2>Current task totals</h2><div className="workspace-kpi-grid">{kpis.map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}</div>
-      <p className="performance-context">Overdue counts open tasks past their current due date. Delivery reliability also depends on agreed deadlines, scope changes, and blockers; it is assessed separately.</p>
+      <p className="performance-context">Overdue counts open tasks past their leave-adjusted deadlines. Sundays and recorded leave do not count as working days.</p>
     </section>
     <section className="workspace-surface performance-methodology">
       <details><summary>View review evidence ({evidence.length} task assessments)</summary>
@@ -99,6 +102,7 @@ export default function PerformanceView({ title, description, personal = false, 
     <section className="workspace-surface performance-methodology">
       <h2>How to interpret review quality</h2>
       <p>Ratings assess work against its agreed acceptance criteria. Work is credited to the person who submitted it, even after reassignment. Only the latest rated review for each task and submitter within the selected period counts.</p>
+      <p>Work submitted on Sundays or on the submitter’s recorded leave is excluded from the score. The date a manager reviews it still determines the reporting period.</p>
       <p>Scores are rounded to a whole number. Bands: 90–100 Excellent; 80–89 Good; 60–79 Meets requirements; below 60 Needs review. Fewer than {MIN_REVIEWED_TASKS} distinct tasks means limited evidence.</p>
       <details><summary>Quality rating criteria</summary><ol>{REVIEW_RUBRIC.map(item => <li key={item.rating}><strong>{item.rating}/5 · {item.label}.</strong> {item.description}</li>)}</ol></details>
       <p>Use this indicator alongside role-specific goals, task complexity, delivery outcomes, dependencies, and employee feedback. Managers should compare evidence and align their use of the criteria before comparing employees. Earlier ratings may predate these criteria.</p>

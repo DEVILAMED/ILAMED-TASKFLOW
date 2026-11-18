@@ -38,6 +38,16 @@ model User {
   notifications     Notification[]       @relation("NotificationRecipient")
   sentNotifications Notification[]       @relation("NotificationActor")
   dailyWorkReports  DailyWorkReport[]
+  leaveDays         EmployeeLeaveDay[]
+}
+
+model EmployeeLeaveDay {
+  employeeId String
+  day        DateTime @db.Date
+  createdAt  DateTime @default(now())
+  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, day])
 }
 
 model Session {

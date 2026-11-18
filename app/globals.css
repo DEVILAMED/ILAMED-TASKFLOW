@@ -564,6 +564,7 @@ html[data-theme="dark"] .workspace-theme { --background: #121a28; --foreground: 
 .employee-calendar-weekday { padding: 3px 0; color: var(--muted); font-size: 12px; }
 .employee-calendar-grid button { position: relative; width: 32px; max-width: 100%; height: 32px; justify-self: center; border-radius: 8px; color: var(--foreground); font-size: 14px; }
 .employee-calendar-grid button.is-outside { color: var(--muted); opacity: 0.65; }
+.employee-calendar-grid button.is-day-off:not(.is-selected) { background: var(--panel-soft); color: var(--muted); }
 .employee-calendar-grid button:hover { background: var(--panel-soft); }
 .employee-calendar-grid button.is-selected { background: #2450cd; color: #fff; opacity: 1; }
 .employee-calendar-grid button.has-tasks::after { position: absolute; bottom: 2px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: var(--accent); content: ""; }

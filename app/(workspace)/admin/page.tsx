@@ -6,6 +6,7 @@ import CompanyTaskBoard from "@/app/(workspace)/company-tasks/company-task-board
 import WorkspacePageHeading from "@/app/workspace-page-heading";
 import { NewTaskButton } from "@/app/new-company-task-dialog";
 import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
+import { getEmployeeLeave } from "@/services/employee-leave";
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const calendar = (await searchParams).view === "calendar";
@@ -35,8 +36,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
     })
   ]);
+  const leaveByEmployee = await getEmployeeLeave([...employees.map(employee => employee.id), ...tasks.flatMap(task => task.assignee ? [task.assignee.id] : [])]);
   return <>
     <WorkspacePageHeading kicker={calendar ? "SCHEDULE" : "WORKFLOW"} title={calendar ? "Calendar" : "Tasks"} action={<NewTaskButton />} />
-    <CompanyTaskBoard isAdmin employees={employees} initialTasks={tasks.map((task) => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
+    <CompanyTaskBoard isAdmin employees={employees} leaveByEmployee={leaveByEmployee} initialTasks={tasks.map((task) => ({ ...task, assignee: task.assignee ? withAvatarUrl(task.assignee) : null, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
   </>;
 }

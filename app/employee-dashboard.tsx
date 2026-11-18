@@ -5,12 +5,15 @@ import { formatTaskDateRange } from "@/lib/task-dates";
 import { summarizeEmployeeWork, employeeDayKey } from "@/lib/employee-dashboard";
 import type { ReviewQualitySummary } from "@/lib/review-quality";
 import UserAvatar from "@/app/user-avatar";
+import { companyTaskSchedule, employeeLeaveDays, isSunday, type LeaveDaysByEmployee } from "@/lib/company-workdays";
 
 type Task = { id: string; title: string; status: string; startDate: Date | string | null; dueDate: Date | string | null };
 type Feedback = { id: string; feedback: string; rating: number | null; reviewer: string; reviewerAvatarUrl?: string | null; taskTitle: string };
 
-export default function EmployeeDashboard({ name, designation, tasks, feedback, quality }: { name: string; designation: string; tasks: Task[]; feedback: Feedback[]; quality: ReviewQualitySummary }) {
-  const summary = summarizeEmployeeWork(tasks, employeeDayKey());
+export default function EmployeeDashboard({ name, designation, tasks, feedback, quality, employeeId, leaveByEmployee }: { name: string; designation: string; tasks: Task[]; feedback: Feedback[]; quality: ReviewQualitySummary; employeeId: string; leaveByEmployee: LeaveDaysByEmployee }) {
+  const today = employeeDayKey();
+  const leaveDays = employeeLeaveDays(leaveByEmployee, employeeId);
+  const summary = summarizeEmployeeWork(tasks.map(task => ({ ...task, assigneeId: employeeId })), today, leaveByEmployee);
   const metrics = [
     { label: "Assigned", value: summary.assigned, icon: ListChecks, href: "/company-tasks", tone: "assigned" },
     { label: "In progress", value: summary.inProgress, icon: Clock3, href: "/company-tasks?status=IN_PROGRESS", tone: "progress" },
@@ -19,11 +22,14 @@ export default function EmployeeDashboard({ name, designation, tasks, feedback, 
     { label: "Completed", value: summary.completed, icon: CheckCircle2, href: "/company-tasks?focus=COMPLETED", tone: "completed" },
     { label: "Review quality · 90 days", value: quality.score ?? "—", icon: Star, href: "/performance", tone: "assigned" },
   ];
-  const upcoming = tasks.filter(task => task.dueDate && !["APPROVED","DONE","CANCELLED","REJECTED"].includes(task.status)).sort((a,b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0,5);
+  const upcoming = tasks.filter(task => task.dueDate && !["APPROVED","DONE","CANCELLED","REJECTED"].includes(task.status))
+    .map(task => ({ ...task, ...companyTaskSchedule(task, leaveDays) }))
+    .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? "")).slice(0, 5);
   const rows = [{label:"Not started",count:tasks.filter(task=>["TODO","ACCEPTED"].includes(task.status)).length,color:"#2443b3"},{label:"In progress",count:summary.inProgress,color:"#2860ee"},{label:"Awaiting review",count:summary.awaiting,color:"#8a55d9"},{label:"Completed",count:summary.completed,color:"#11958d"},{label:"Other work",count:tasks.filter(task=>["ON_HOLD","REVISION_REQUESTED","CANCELLED","REJECTED"].includes(task.status)).length,color:"#a9b5c9"}];
   const circumference = 2*Math.PI*62;
   return <div className="workspace-view employee-dashboard">
     <WorkspacePageHeading kicker="MY WORKSPACE" title={`Welcome back, ${name.split(/\s+/)[0]}`} description={`${designation} · Your work, schedule, and progress at a glance.`} action={<Link href="/company-tasks" className="accent-button workspace-standard-button">View my tasks <ArrowRight size={14}/></Link>} />
+    {isSunday(today) || leaveDays.includes(today) ? <p className="performance-context">{isSunday(today) ? "Today is a company holiday." : "You are on leave today."}</p> : null}
     <section className="employee-dashboard-stats" aria-label="My task summary">{metrics.map(({label,value,icon:Icon,href,tone})=><Link href={href} key={label} className={`employee-summary-card metric-${tone}`}><div><span>{label}</span><strong>{value}</strong></div><Icon size={19} strokeWidth={1.7} aria-hidden="true"/></Link>)}</section>
     <p className="performance-context">Review quality: {quality.label.toLowerCase()} · {quality.ratedTaskCount} distinct reviewed tasks in the last 90 days. <Link href="/performance">View evidence and scoring criteria</Link></p>
     <section className="employee-dashboard-panels">

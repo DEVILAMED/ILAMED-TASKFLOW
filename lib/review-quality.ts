@@ -1,3 +1,5 @@
+import { employeeDayKey, employeeLeaveDays, isCompanyWorkday, type LeaveDaysByEmployee } from "./company-workdays.ts";
+
 // Product defaults, shared by every score surface. These are not an HR standard.
 export const MIN_REVIEWED_TASKS = 5;
 export const REVIEW_PERIODS = [
@@ -22,6 +24,7 @@ export type ReviewEvidence = {
   employeeId: string;
   rating: number | null;
   createdAt: Date | string;
+  submittedAt: Date | string;
   decision: string;
 };
 export type ReviewEvidenceDetail = ReviewEvidence & { employeeName: string; employeeAvatarUrl?: string | null; taskTitle: string; reviewerName: string; feedback: string };
@@ -64,13 +67,15 @@ export function reviewQualityLabel(score: number | null, ratedTaskCount: number)
   return score >= 90 ? "Excellent" : score >= 80 ? "Good" : score >= 60 ? "Meets requirements" : "Needs review";
 }
 
-export function summarizeReviewQuality(reviews: readonly ReviewEvidence[], window: ReviewWindow) {
+export function summarizeReviewQuality(reviews: readonly ReviewEvidence[], window: ReviewWindow, leaveByEmployee: LeaveDaysByEmployee = {}) {
   const latest = new Map<string, ReviewEvidence>();
   let reviewCount = 0;
   let revisionCount = 0;
   for (const review of reviews) {
     const timestamp = new Date(review.createdAt).getTime();
     if (!Number.isFinite(timestamp) || timestamp < window.start.getTime() || timestamp >= window.end.getTime()) continue;
+    const submitted = new Date(review.submittedAt);
+    if (!Number.isFinite(submitted.getTime()) || !isCompanyWorkday(employeeDayKey(submitted), employeeLeaveDays(leaveByEmployee, review.employeeId))) continue;
     if (review.decision === "REVISION_REQUESTED") revisionCount++;
     if (!isReviewRating(review.rating) || !review.taskId || !review.employeeId) continue;
     reviewCount++;

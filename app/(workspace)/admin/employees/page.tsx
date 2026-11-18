@@ -10,6 +10,8 @@ import { getReviewEvidence } from "@/services/review-quality";
 import ReviewQualityBadge from "@/app/review-quality-badge";
 import UserAvatar from "@/app/user-avatar";
 import { withAvatarUrl } from "@/lib/user-avatar";
+import { getEmployeeLeave } from "@/services/employee-leave";
+import { employeeDayKey } from "@/lib/employee-dashboard";
 
 export default async function EmployeesPage() {
   const currentUser = await getCurrentUser();
@@ -29,7 +31,9 @@ export default async function EmployeesPage() {
   ]);
   const users = userRows.map(withAvatarUrl);
   const teamMembers = users.filter((user) => user.role !== "ADMIN");
-  const qualityByEmployee = new Map(summarizeReviewQuality(reviews, period).employees.map(person => [person.employeeId, person]));
+  const today = employeeDayKey();
+  const leaveByEmployee = await getEmployeeLeave(teamMembers.map(user => user.id));
+  const qualityByEmployee = new Map(summarizeReviewQuality(reviews, period, leaveByEmployee).employees.map(person => [person.employeeId, person]));
   return <>
     <div className="workspace-view"><WorkspacePageHeading kicker="ROSTER" title="Team" description={`Review quality: ${period.label.toLowerCase()} (${period.startDay} to ${period.endDay}, India time). At least ${MIN_REVIEWED_TASKS} distinct reviewed tasks per employee; task totals show current assignments.`} />
       <section className="workspace-team-grid" aria-label="Team members">{teamMembers.map(employee => {
@@ -51,8 +55,10 @@ export default async function EmployeesPage() {
           {users.length ? (
             <EmployeePresence
               currentUserId={currentUser.id}
+              today={today}
               employees={users.map((employee) => ({
                 ...employee,
+                leaveDays: leaveByEmployee[employee.id] ?? [],
                 createdAt: employee.createdAt.toISOString(),
                 lastSeenAt: employee.lastSeenAt?.toISOString() ?? null,
                 profile: employee.employeeProfile ? { ...employee.employeeProfile, joiningDate: employee.employeeProfile.joiningDate?.toISOString().slice(0, 10) ?? null } : null,

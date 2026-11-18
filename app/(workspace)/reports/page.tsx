@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import ReportDownloads from "./report-downloads";
 import { formatTaskDateRange } from "@/lib/task-dates";
+import { companyTaskSchedule, employeeDayKey, employeeLeaveDays, isCompanyTaskOverdue } from "@/lib/company-workdays";
+import { getLeaveForTasks } from "@/services/employee-leave";
 
 const STATUS_ROWS = [
   { key: "TODO", label: "Not started", color: "bg-slate-400" },
@@ -27,16 +29,8 @@ const PRIORITY_ROWS = [
   { key: "LOW", label: "Low", color: "bg-emerald-400" },
 ] as const;
 
-function dayKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function dueDayKey(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDueDate(value: Date) {
-  return value.toLocaleDateString("en-US", {
+function formatDueDate(value: string) {
+  return new Date(value + "T00:00:00Z").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -59,13 +53,14 @@ export default async function ReportsPage() {
     ? await prisma.teamMembership.findMany({ where: { teamId: { in: managerMemberships.map((membership) => membership.teamId) } }, select: { userId: true } })
     : [];
   const reportAssigneeIds = [...new Set([user.id, ...managerMembers.map((membership) => membership.userId)])];
-  const tasks = await prisma.task.findMany({
+  const taskRows = await prisma.task.findMany({
     where: {
       projectId: COMPANY_TASK_PROJECT_ID,
       ...(user.role === "ADMIN" ? {} : { assigneeId: { in: user.role === "MANAGER" ? reportAssigneeIds : [user.id] } }),
     },
     select: {
       id: true,
+      assigneeId: true,
       title: true,
       status: true,
       priority: true,
@@ -77,18 +72,22 @@ export default async function ReportsPage() {
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
   });
 
-  const today = dayKey(new Date());
+  const today = employeeDayKey();
+  const leaveByEmployee = await getLeaveForTasks(taskRows);
+  const tasks = taskRows.map(task => ({
+    ...task,
+    ...companyTaskSchedule(task, employeeLeaveDays(leaveByEmployee, task.assigneeId)),
+    overdue: isCompanyTaskOverdue(task, today, leaveByEmployee),
+  }));
   const todayDate = new Date(`${today}T00:00:00.000Z`);
   const nextWeek = new Date(todayDate);
   nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
   const nextWeekKey = nextWeek.toISOString().slice(0, 10);
   const completed = tasks.filter((task) => completedStatus(task.status)).length;
-  const overdue = tasks.filter(
-    (task) => !terminalStatus(task.status) && task.dueDate && dueDayKey(task.dueDate) < today,
-  ).length;
+  const overdue = tasks.filter(task => task.overdue).length;
   const dueSoon = tasks.filter((task) => {
     if (terminalStatus(task.status) || !task.dueDate) return false;
-    const dueDay = dueDayKey(task.dueDate);
+    const dueDay = task.dueDate;
     return dueDay >= today && dueDay <= nextWeekKey;
   }).length;
   const completionRate = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
@@ -123,13 +122,13 @@ export default async function ReportsPage() {
     (left, right) => right.total - left.total || left.name.localeCompare(right.name),
   );
   const tasksToWatch = tasks
-    .filter((task) => !terminalStatus(task.status) && task.dueDate && dueDayKey(task.dueDate) <= nextWeekKey)
-    .sort((left, right) => left.dueDate!.getTime() - right.dueDate!.getTime())
+    .filter((task) => !terminalStatus(task.status) && task.dueDate && task.dueDate <= nextWeekKey)
+    .sort((left, right) => left.dueDate!.localeCompare(right.dueDate!))
     .slice(0, 6);
 
   return (
     <>
-      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), status: task.status, priority: task.priority, startDate: task.startDate ? formatDueDate(task.startDate) : "Not set", deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", createdAt: task.createdAt.toISOString() }))} />
+      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), status: task.status, priority: task.priority, startDate: task.startDate ? formatDueDate(task.startDate) : "Not set", deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", workingDays: task.workingDays, createdAt: task.createdAt.toISOString() }))} />
       <details className="workspace-additional"><summary>View all-time task analytics</summary>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <section className="panel-card rounded-3xl p-5 sm:p-7">
@@ -277,7 +276,7 @@ export default async function ReportsPage() {
             {tasksToWatch.length ? (
               <ul className="divide-y divide-white/[0.08]">
                 {tasksToWatch.map((task) => {
-                  const isOverdue = dueDayKey(task.dueDate!) < today;
+                  const isOverdue = task.overdue;
                   return (
                     <li key={task.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                       <div className="min-w-0">
