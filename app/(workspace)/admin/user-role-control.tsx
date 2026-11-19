@@ -130,7 +130,7 @@ export default function UserRoleControl({
         </div>
       ) : null}
       {!isCurrentUser && role !== "ADMIN" && isBlocked ? <p className="text-xs text-amber-200/75">Login blocked</p> : null}
-      {error ? <p role="alert" className="text-xs text-red-300">{error}</p> : null}
+      {error ? <p role="alert" className="text-xs feedback-error-text">{error}</p> : null}
     </div>
   );
 }

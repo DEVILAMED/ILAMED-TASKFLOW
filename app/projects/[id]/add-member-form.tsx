@@ -72,7 +72,7 @@ export default function AddMemberForm({ projectId }: AddMemberFormProps) {
         </p>
       ) : null}
       {success ? (
-        <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+        <p className="feedback-success rounded-lg border px-3 py-2 text-sm">
           {success}
         </p>
       ) : null}

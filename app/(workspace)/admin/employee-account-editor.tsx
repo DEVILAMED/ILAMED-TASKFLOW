@@ -64,7 +64,7 @@ export default function EmployeeAccountEditor({ account, onSaved }: { account: A
         <button type="button" className="secondary-button rounded-xl px-3 py-2 text-xs" aria-haspopup="dialog" aria-controls={dialogId} aria-label={`Edit account for ${account.name || account.email}`} onClick={open}>
           Edit account
         </button>
-        {saved ? <span role="status" className="text-xs text-emerald-300">Account saved</span> : null}
+        {saved ? <span role="status" className="text-xs feedback-success-text">Account saved</span> : null}
       </div>
       <dialog ref={dialog} id={dialogId} className="workspace-task-dialog" aria-labelledby={`${dialogId}-title`} onClose={() => { form.current?.reset(); setError(null); }} onCancel={(event) => { if (saving) event.preventDefault(); }}>
         <div className="workspace-dialog-heading">

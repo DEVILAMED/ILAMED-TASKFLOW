@@ -7,6 +7,8 @@ import { accessibleProjectWhere, accessibleTaskWhere } from "@/project-access";
 import type { Prisma } from "@prisma/client";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
+import { accessibleTodoListWhere } from "@/lib/todo-access";
+import { dispatchPersonalTaskReminders } from "@/services/personal-task-reminders";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -14,6 +16,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
+  await dispatchPersonalTaskReminders(user.id);
   const where: Prisma.NotificationWhereInput = {
     userId: user.id,
     OR: [
@@ -26,6 +29,7 @@ export async function GET() {
         ],
       },
       { projectId: COMPANY_TASK_PROJECT_ID },
+      { type: NotificationType.PERSONAL_TASK_REMINDER, todoTask: { is: { list: accessibleTodoListWhere(user.id) } } },
     ],
   };
   const [unreadCount, notifications] = await Promise.all([

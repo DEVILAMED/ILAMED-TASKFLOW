@@ -304,7 +304,7 @@ export default function NewTaskForm({
       )}
 
       {error ? (
-        <p className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <p className="mt-4 feedback-error rounded-2xl border px-4 py-3 text-sm">
           {error}
         </p>
       ) : null}

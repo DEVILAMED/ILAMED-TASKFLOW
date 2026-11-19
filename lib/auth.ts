@@ -109,8 +109,9 @@ export async function deleteUserSessions(userId: string): Promise<void> {
   }
 }
 
-export async function getUserBySessionToken(
+async function resolveSessionUser(
   token: string | null | undefined,
+  refreshCookie?: (expiresAt: Date) => void,
 ): Promise<AuthUser | null> {
   if (!token) {
     return null;
@@ -185,11 +186,12 @@ export async function getUserBySessionToken(
     return null;
   }
 
-  if (session.expiresAt.getTime() < Date.now()) {
+  if (session.expiresAt.getTime() <= Date.now()) {
     try {
-      await prisma.session.delete({
+      await prisma.session.deleteMany({
         where: {
           id: session.id,
+          expiresAt: { lte: new Date(Date.now()) },
         },
       });
     } catch (error) {
@@ -201,27 +203,47 @@ export async function getUserBySessionToken(
     return null;
   }
 
-  const refreshedExpiry = sessionExpiresAt();
-  if (session.expiresAt.getTime() - Date.now() < SESSION_REFRESH_WINDOW_MS) {
+  // Only renew from a route that can also send the matching browser cookie.
+  // Read-only server renders must not extend just the database expiry.
+  if (refreshCookie && session.expiresAt.getTime() - Date.now() < SESSION_REFRESH_WINDOW_MS) {
+    const refreshedExpiry = sessionExpiresAt();
     try {
-      await prisma.session.update({
-        where: { id: session.id },
+      const refreshed = await prisma.session.updateMany({
+        where: { id: session.id, tokenHash, expiresAt: { gt: new Date(Date.now()) }, user: { isBlocked: false } },
         data: { expiresAt: refreshedExpiry },
       });
+      // A concurrent logout, password reset or expiry must not recreate a session.
+      if (!refreshed.count) return null;
     } catch (error) {
       if (isDatabaseConnectionError(error)) {
         console.warn("Session refresh skipped because the database connection is unavailable.");
+        return session.user;
       } else {
         throw error;
       }
     }
+    refreshCookie(refreshedExpiry);
+  } else if (refreshCookie) {
+    // Repair an older cookie or a lost renewal response without extending the
+    // database session again. Browsers do not send their cookie expiry to us.
+    refreshCookie(session.expiresAt);
   }
 
   return session.user;
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export async function getUserBySessionToken(token: string | null | undefined): Promise<AuthUser | null> {
+  return resolveSessionUser(token);
+}
+
+// refreshSession is only for route handlers, where cookies are mutable.
+export async function getCurrentUser({ refreshSession = false }: { refreshSession?: boolean } = {}): Promise<AuthUser | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value ?? null;
-  return getUserBySessionToken(token);
+  return resolveSessionUser(token, refreshSession && token ? (expiresAt) => {
+    store.set({
+      name: SESSION_COOKIE, value: token, expires: expiresAt,
+      httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/",
+    });
+  } : undefined);
 }

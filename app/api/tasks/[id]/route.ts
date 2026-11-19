@@ -141,9 +141,9 @@ export async function PATCH(
     );
   }
 
-  if (task.projectId === COMPANY_TASK_PROJECT_ID && user.role !== "ADMIN") {
+  if (task.projectId === COMPANY_TASK_PROJECT_ID) {
     return NextResponse.json(
-      { ok: false, error: "Only administrators can edit company task details. Use the company task workflow for progress updates." },
+      { ok: false, error: "Use the company task workflow to edit company tasks or update progress." },
       { status: 403 },
     );
   }

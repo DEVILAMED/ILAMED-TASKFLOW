@@ -586,7 +586,7 @@ export default function TaskBoard({
       {notifications.length ? (
         <div className="fixed bottom-6 right-6 z-50 flex w-full max-w-sm flex-col gap-3">
           {notifications.map((note) => (
-            <div key={note.id} className={`rounded-[22px] border px-4 py-3 text-sm shadow-lg ${note.type === "success" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : note.type === "error" ? "border-red-500/20 bg-red-500/10 text-red-300" : "border-white/[0.08] bg-[#10202a] text-white/80"}`}>
+            <div key={note.id} className={`rounded-[22px] border px-4 py-3 text-sm shadow-lg ${note.type === "success" ? "feedback-success" : note.type === "error" ? "feedback-error" : "border-white/[0.08] bg-[#10202a] text-white/80"}`}>
               {note.message}
             </div>
           ))}

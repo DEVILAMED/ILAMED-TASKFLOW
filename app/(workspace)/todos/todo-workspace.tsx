@@ -34,7 +34,6 @@ export default function TodoWorkspace({ lists: initialLists, initialTasks, userI
   const [notice, setNotice] = useState<string | null>(null);
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const mutationPending = useRef(false);
-  const notified = useRef(new Set<string>());
   const today = employeeDayKey();
   const activeTaskId = params.get("task");
   const activeTask = tasks.find(task => task.id === activeTaskId);
@@ -101,28 +100,12 @@ export default function TodoWorkspace({ lists: initialLists, initialTasks, userI
     const permission = await Notification.requestPermission();
     setRemindersEnabled(permission === "granted");
     if (permission !== "granted") setError("Allow notifications in your browser settings to receive task reminders.");
-    else setNotice("Desktop reminders enabled while this workspace is open.");
+    else {
+      setNotice("Desktop reminders enabled across the app. Due reminders are also saved in Notifications.");
+      window.dispatchEvent(new Event("workspace:reminders-enabled"));
+    }
   }
   useEffect(() => { if ("Notification" in window) setRemindersEnabled(Notification.permission === "granted"); }, []);
-  useEffect(() => {
-    if (!remindersEnabled) return;
-    let stopped = false;
-    async function check() {
-      try {
-        const data = await request<{ tasks: PersonalTask[] }>("/api/personal-tasks?view=all");
-        if (stopped || Notification.permission !== "granted") return;
-        for (const task of data.tasks) {
-          const key = `${task.id}:${task.reminderAt}`;
-          if (!task.isCompleted && task.reminderAt && new Date(task.reminderAt).getTime() <= Date.now() && !notified.current.has(key)) {
-            notified.current.add(key);
-            new Notification(task.title, { body: task.note || `Reminder from ${task.list.name}`, tag: `ilamed-${task.id}` });
-          }
-        }
-      } catch { /* A temporary polling failure is retried at the next interval. */ }
-    }
-    void check(); const interval = window.setInterval(() => void check(), 30_000);
-    return () => { stopped = true; window.clearInterval(interval); };
-  }, [remindersEnabled]);
 
   const onUpdate = (id: string, changes: TaskChanges) => { void updateTask(id, changes); };
   const taskViews = ["tasks", "my-day", "important"].includes(section);

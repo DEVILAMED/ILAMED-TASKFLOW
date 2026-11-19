@@ -69,8 +69,8 @@ export default function ReviewQueue() {
       <p>Assess the submitted work against its agreed acceptance criteria. Select a rating deliberately and describe the evidence in your feedback, including any corrections needed or added value. Consider task complexity and dependencies when discussing delivery.</p>
       <details><summary>View the 1–5 rating guide</summary><ol>{REVIEW_RUBRIC.map(item => <li key={item.rating}><strong>{item.rating}/5 · {item.label}.</strong> {item.description}</li>)}</ol></details>
     </section>
-    {error ? <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
-    {notice ? <p role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
+    {error ? <p role="alert" className="feedback-error rounded-xl border p-3 text-sm">{error}</p> : null}
+    {notice ? <p role="status" className="feedback-success rounded-xl border p-3 text-sm">{notice}</p> : null}
     {selectedTask ? <div className="text-sm text-[var(--muted)]">{!loading && !tasks.some((task) => task.id === selectedTask) ? "This submission is no longer awaiting review or is unavailable." : "Showing the selected submission."} <button type="button" className="text-[var(--accent)] underline" onClick={() => { const url = new URL(window.location.href); url.searchParams.delete("task"); window.history.replaceState(null, "", url); }}>Show all submissions</button></div> : null}
     {loading ? <p role="status" className="p-6 text-sm text-[var(--muted)]">Loading submissions...</p> : null}
     {!loading && !tasks.length && !error ? <p className="workspace-empty-panel">Nothing in the queue right now.</p> : null}

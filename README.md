@@ -72,6 +72,27 @@ Daily dates use India time. Due occurrences are generated when company task, das
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Session renewal
+
+Sessions last seven days. Visible workspace heartbeats and `/api/auth/me` renew an active session when fewer than 12 hours remain, updating the database expiry and the browser's HttpOnly cookie together. These endpoints also synchronize the cookie with the saved expiry after a lost renewal response. Server-rendered pages only validate sessions and do not extend their database expiry. Expired, revoked, and blocked sessions cannot be renewed. Inactive users whose cookie has expired must sign in again. No database migration is required for this change. Run its regression checks with `node --test lib/auth-sessions.test.mjs`.
+
+## Personal task reminders
+
+Due reminders are saved in Notifications for the list owner and current shared-list members, even without desktop permission. A background worker in the running Node server checks every 30 seconds in batches of 100; viewing Notifications also catches up accessible due reminders. Failed batches retry on the next sweep, and database claims plus unique receipts prevent duplicate notifications across app instances, tabs, reloads, and restarts. Blocked accounts are excluded, and users who lose list access cannot read or claim its reminders.
+
+Enable desktop reminders from Personal Tasks. Desktop alerts work across signed-in workspace pages, with a saved claim preventing repeats on other tabs or devices. Desktop delivery is at most once: if a tab closes or browser delivery fails after a claim, the unread in-app reminder remains available. Completing a task or changing/removing its reminder suppresses pending old desktop alerts. A different reminder time creates a new reminder; choosing a previously delivered time does not send it twice. Old in-app reminders remain as history, and deleting a task removes its reminders.
+
+The Node server must remain running for background processing. Downtime is caught up after restart. Desktop pop-ups need an open app tab and browser permission; Web Push for delivery with every tab closed is not configured. No separate cron service or push credentials are required for the in-app worker.
+
+Before starting the updated app, apply `20261119120000_add_durable_personal_reminders` and regenerate Prisma Client:
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
+
+The included Dockerfile applies migrations at startup. Run reminder regression checks with `node --test lib/personal-task-reminders.test.mjs`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

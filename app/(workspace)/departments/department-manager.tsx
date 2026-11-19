@@ -64,7 +64,7 @@ export default function DepartmentManager({ initialDepartments, employees }: { i
         <label className="grid gap-1.5 text-xs text-white/55">Department head<select value={headId} onChange={(event) => setHeadId(event.target.value)} className="soft-input h-10 rounded-lg px-2 text-sm"><option value="">Not assigned</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select></label>
         <div className="flex gap-2"><button disabled={pending} className="primary-button px-4 py-2 text-sm disabled:opacity-50">{pending ? "Saving…" : editing ? "Save changes" : "Create department"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setName(""); setDescription(""); setHeadId(""); }} className="secondary-button px-4 py-2 text-sm">Cancel</button> : null}</div>
       </form>
-      {error ? <p role="alert" className="mt-3 text-xs text-rose-300">{error}</p> : null}{notice ? <p role="status" className="mt-3 text-xs text-emerald-300">{notice}</p> : null}
+      {error ? <p role="alert" className="mt-3 text-xs feedback-error-text">{error}</p> : null}{notice ? <p role="status" className="mt-3 text-xs feedback-success-text">{notice}</p> : null}
     </section>
   </div>;
 }

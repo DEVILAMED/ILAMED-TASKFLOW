@@ -8,6 +8,7 @@ import { Suspense, useEffect, useRef, type ReactNode } from "react";
 import { WorkspaceSwitcher } from "@/app/workspace-switcher";
 import NotificationsInbox from "@/app/notifications-inbox";
 import PresenceHeartbeat from "@/app/presence-heartbeat";
+import PersonalTaskReminders from "@/app/personal-task-reminders";
 import GlobalSearch from "@/app/global-search";
 import ThemeToggle from "@/app/theme-toggle";
 import WorkspaceNavigation, { WorkspaceNavigationFallback } from "@/app/workspace-navigation";
@@ -75,6 +76,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userId, user
 
   return <div className="workspace-theme min-h-screen lg:flex">
     <PresenceHeartbeat />
+    <PersonalTaskReminders key={userId || userEmail} />
     {activeWorkspace === "projects" && userRole !== "USER" ? <Suspense fallback={null}><NewCompanyTaskDialog employees={taskEmployees} departments={taskDepartments} /></Suspense> : null}
     <a href="#workspace-main" className="workspace-skip-link">Skip to content</a>
     <aside className="workspace-sidebar hidden shrink-0 lg:sticky lg:top-0 lg:flex lg:h-screen" data-guide="sidebar">

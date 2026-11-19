@@ -399,8 +399,8 @@ export default function CompanyTaskBoard({
       </div> : null}
       <section className="panel-card workspace-task-results">
         {expandedTaskId && !activeTask ? <p role="status" className="px-5 py-3 text-sm">This task is unavailable or is no longer assigned to you. <button type="button" onClick={() => setExpandedTaskId(null)} className="underline">Dismiss</button></p> : null}
-        {error ? <p role="alert" className="mx-5 mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p> : null}
-        {notice ? <p role="status" className="mx-5 mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</p> : null}
+        {error ? <p role="alert" className="feedback-error mx-5 mt-4 rounded-xl border px-4 py-3 text-sm">{error}</p> : null}
+        {notice ? <p role="status" className="feedback-success mx-5 mt-4 rounded-xl border px-4 py-3 text-sm">{notice}</p> : null}
 
         {visibleTasks.length || view === "calendar" ? view === "board" ? (
           <KanbanBoard tasks={visibleTasks} isAdmin={isAdmin} pendingId={pendingId} onUpdate={updateStatus} onOpen={(task) => void toggleComments(task.id)} />
@@ -465,10 +465,10 @@ export default function CompanyTaskBoard({
                           <div className="user-identity">
                           {task.assignee ? <UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} size={28} /> : null}
                           <select
-                            aria-label={`Reassign ${task.title}`}
+                            aria-label={`Reassign ${task.title}`} title={task.status === "SUBMITTED_FOR_REVIEW" ? "Review the pending submission or cancel the task before changing its assignee." : undefined}
                             value={task.assignee?.id ?? ""}
                             onChange={(event) => void reassignTask(task, event.target.value)}
-                            disabled={pendingId === task.id}
+                            disabled={pendingId === task.id || task.status === "SUBMITTED_FOR_REVIEW"}
                             className="soft-input h-9 max-w-48 rounded-lg px-2 text-xs disabled:opacity-50"
                           >
                             <option value="">Unassigned</option>
@@ -555,7 +555,7 @@ export default function CompanyTaskBoard({
           {task.assignee ? <p className="user-identity text-sm"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} />{employeeLabel(task.assignee)}</p> : null}
           {isAdmin && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
           {isAdmin && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
-          {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
+          {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id || task.status === "SUBMITTED_FOR_REVIEW"} title={task.status === "SUBMITTED_FOR_REVIEW" ? "Review the pending submission or cancel the task before changing its assignee." : undefined} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
           {!isAdmin ? <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
           {notice ? <p role="status" className="text-sm text-emerald-600">{notice}</p> : null}
           {error ? <p role="alert" className="text-sm text-rose-500">{error}</p> : null}

@@ -132,9 +132,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         projectId: COMPANY_TASK_PROJECT_ID,
         ...companyTaskAccessWhere(user),
       },
-      select: { id: true, title: true, assigneeId: true, status: true, startDate: true, dueDate: true },
+      select: { id: true, title: true, assigneeId: true, status: true, startDate: true, dueDate: true, updatedAt: true },
     });
     if (!existing) return null;
+
+    if (existing.status === TaskStatus.SUBMITTED_FOR_REVIEW && nextAssigneeId !== undefined && nextAssigneeId !== existing.assigneeId) {
+      return { assignmentError: true as const };
+    }
 
     if ("startDate" in details.data || "dueDate" in details.data) {
       const rangeError = validateCompanyTaskDateRange(
@@ -153,7 +157,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
 
     const updated = await tx.task.update({
-      where: { id: existing.id, status: existing.status },
+      // Reassignment can leave status unchanged. Match the authorized snapshot
+      // atomically so a concurrent edit cannot invalidate the checks above.
+      where: {
+        ...companyTaskAccessWhere(user),
+        id: existing.id,
+        projectId: COMPANY_TASK_PROJECT_ID,
+        assigneeId: existing.assigneeId,
+        status: existing.status,
+        updatedAt: existing.updatedAt,
+      },
       data: {
         ...details.data,
         ...(status === undefined ? {} : { status: status as TaskStatus }),
@@ -214,16 +227,23 @@ export async function PATCH(request: Request, { params }: RouteContext) {
             ...(images.length ? { images: { create: images } } : {}),
           },
         });
-        const managers = existing.assigneeId
-          ? await tx.teamMembership.findMany({
-              where: { userId: existing.assigneeId, team: { memberships: { some: { userId: { not: existing.assigneeId }, role: "MANAGER" } } } },
-              select: { team: { select: { memberships: { where: { role: "MANAGER" }, select: { userId: true } } } } },
-            })
-          : [];
-        const managerIds = [...new Set(managers.flatMap((membership) => membership.team.memberships.map((item) => item.userId)))];
-        if (managerIds.length) {
-          await tx.notification.createMany({ data: managerIds.map((managerId) => ({
-            userId: managerId, actorId: user.id, projectId: COMPANY_TASK_PROJECT_ID, taskId: existing.id,
+        // Query users so managers shared across teams receive one notification.
+        // Only accounts that can review someone else's work suppress the fallback.
+        const managers = await tx.user.findMany({
+          where: {
+            id: { not: user.id }, isBlocked: false,
+            role: { in: [UserRole.MANAGER, UserRole.ADMIN] },
+            teamMemberships: { some: { role: "MANAGER", team: { memberships: { some: { userId: user.id } } } } },
+          },
+          select: { id: true },
+        });
+        const recipients = managers.length ? managers : await tx.user.findMany({
+          where: { id: { not: user.id }, role: UserRole.ADMIN, isBlocked: false },
+          select: { id: true },
+        });
+        if (recipients.length) {
+          await tx.notification.createMany({ data: recipients.map((recipient) => ({
+            userId: recipient.id, actorId: user.id, projectId: COMPANY_TASK_PROJECT_ID, taskId: existing.id,
             type: "TASK_SUBMITTED" as const, message: `${user.name || user.email} submitted "${existing.title}" for review`, href: "/reviews",
           })) });
         }
@@ -261,10 +281,23 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
     }
     return updated;
+  }).catch((error: unknown) => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2025", "P2034"].includes(error.code)) {
+      return { conflictError: true as const };
+    }
+    throw error;
   });
 
   if (!task) {
     return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
+  }
+
+  if ("conflictError" in task) {
+    return NextResponse.json({ ok: false, error: "This task changed while you were updating it. Refresh the task and try again." }, { status: 409 });
+  }
+
+  if ("assignmentError" in task) {
+    return NextResponse.json({ ok: false, error: "Review the pending submission or cancel the task before changing its assignee." }, { status: 409 });
   }
 
   if ("transitionError" in task) {

@@ -473,7 +473,7 @@ export default function TaskCard({
             </select>
           </label>
         </div>
-        {error ? <p className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="feedback-error rounded-2xl border px-4 py-3 text-sm">{error}</p> : null}
         <div className="flex flex-wrap gap-2">
           <button className="accent-button flex h-10 items-center px-5 text-xs font-semibold uppercase tracking-[0.16em] disabled:opacity-60" type="submit" disabled={isPending} aria-busy={isPending}>
             {isPending ? "Saving..." : "Save changes"}
@@ -588,7 +588,7 @@ export default function TaskCard({
             Add label
           </button>
         </form> : null}
-        {labelError ? <p className="mt-2 text-xs text-red-300">{labelError}</p> : null}
+        {labelError ? <p className="mt-2 text-xs feedback-error-text">{labelError}</p> : null}
       </div>
 
       <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-4">
@@ -608,7 +608,7 @@ export default function TaskCard({
           <textarea className="soft-input min-h-[90px] rounded-[22px] px-4 py-3 text-sm" placeholder="Write a comment" value={commentBody} onChange={(event) => setCommentBody(event.target.value)} />
           <p className="text-xs text-white/35">Mention a teammate with their email, like @name@example.com.</p>
           <div className="flex items-center justify-between gap-2">
-            {commentError ? <span className="text-xs text-red-300">{commentError}</span> : <span className="text-xs text-white/30">Keep it short, clear, and actionable.</span>}
+            {commentError ? <span className="text-xs feedback-error-text">{commentError}</span> : <span className="text-xs text-white/30">Keep it short, clear, and actionable.</span>}
             <button className="accent-button flex h-10 items-center px-4 text-[11px] font-semibold uppercase tracking-[0.16em] disabled:opacity-60" type="submit" disabled={isPending} aria-busy={isPending}>
               Add comment
             </button>
@@ -616,7 +616,7 @@ export default function TaskCard({
         </form>
       </div>
 
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="text-sm feedback-error-text">{error}</p> : null}
     </div>
   );
 }

@@ -7,6 +7,8 @@ The performance page reports manager-rated work quality and current task activit
 - The default reporting period is the last 90 calendar days, including today, in Asia/Kolkata. The performance page also offers 30 and 365 days. Current task counts cover all current assignments and are independent of this filter.
 - Each task and submitter contributes its latest valid rated review within the selected period. Repeated revision reviews remain in the feedback history and revision count, but do not increase that task's weight.
 - Reviews are attributed to the submission's author, not the task's current assignee. Reassignment does not transfer past ratings.
+- Tasks awaiting review cannot be reassigned or unassigned. Review the pending submission or cancel the task first, then change the assignee. Cancellation preserves submission history without rating it. Other task details can still be edited while review is pending.
+- Submissions and resubmissions notify the employee's active team managers who can review their work. If none are available, active administrators receive the review notification instead. The submitting employee never receives their own review-request notification.
 - Sundays are company holidays. Administrators can record or remove an employee's leave by date in Team → Manage user accounts → Manage leave. Dates use the India calendar.
 - A Sunday or leave-day submission stays in feedback history and is excluded from the review score. The manager's review date still determines the reporting period.
 - Company task schedules use Monday through Saturday. Leave within the planned range moves the effective deadline to preserve the planned workdays. Deadlines on Sunday roll forward. Saved assignment dates remain available in the task editor.

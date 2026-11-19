@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import type { CompanyTaskRepeatInfo } from "@/lib/company-task-repeat";
 
 type Employee = { id: string; name: string | null; email: string };
-type EditableTask = CompanyTaskRepeatInfo & { id: string; title: string; description: string | null; startDate: string | null; dueDate: string | null; priority: "LOW" | "MEDIUM" | "HIGH"; assignee: Employee | null };
+type EditableTask = CompanyTaskRepeatInfo & { id: string; title: string; status: string; description: string | null; startDate: string | null; dueDate: string | null; priority: "LOW" | "MEDIUM" | "HIGH"; assignee: Employee | null };
 export type CompanyTaskChanges = { title?: string; description?: string; startDate?: string | null; dueDate?: string | null; priority?: "LOW" | "MEDIUM" | "HIGH"; assigneeId?: string | null };
 
 export default function CompanyTaskEditor({ task, employees, pending, onSave, onDelete }: {
@@ -27,7 +27,7 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
     const title = String(values.get("title") || "").trim();
     const description = String(values.get("description") || "").trim();
     const priority = String(values.get("priority")) as EditableTask["priority"];
-    const assigneeId = String(values.get("assigneeId") || "") || null;
+    const assigneeId = task.status === "SUBMITTED_FOR_REVIEW" ? editingTask.assignee?.id ?? null : String(values.get("assigneeId") || "") || null;
     if (title !== editingTask.title) changes.title = title;
     if (description !== (editingTask.description || "")) changes.description = description;
     if (startDate !== (editingTask.startDate?.slice(0, 10) || "")) changes.startDate = startDate;
@@ -53,11 +53,12 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
           <label className="workspace-field">End date<input name="dueDate" type="date" required value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} disabled={pending} /></label>
         </fieldset>
         <label className="workspace-field">Priority<select name="priority" defaultValue={editingTask.priority} disabled={pending}><option value="LOW">Low</option><option value="MEDIUM">Normal</option><option value="HIGH">High</option></select></label>
-        <label className="workspace-field field-wide">Assigned to<select name="assigneeId" defaultValue={editingTask.assignee?.id ?? ""} disabled={pending}>
+        <label className="workspace-field field-wide">Assigned to<select name="assigneeId" defaultValue={editingTask.assignee?.id ?? ""} disabled={pending || task.status === "SUBMITTED_FOR_REVIEW"}>
           <option value="">Unassigned</option>
           {editingTask.assignee && !employees.some((employee) => employee.id === editingTask.assignee?.id) ? <option value={editingTask.assignee.id}>{editingTask.assignee.name || editingTask.assignee.email} (inactive)</option> : null}
           {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}
         </select></label>
+        {task.status === "SUBMITTED_FOR_REVIEW" ? <p className="field-wide text-xs text-[var(--muted)]">Review the pending submission or cancel the task before changing its assignee.</p> : null}
         <div className="workspace-dialog-actions field-wide"><button type="button" className="workspace-cancel" disabled={pending} onClick={() => setEditingTask(null)}>Cancel</button><button type="submit" className="accent-button" disabled={pending} aria-busy={pending}>{pending ? "Saving..." : "Save changes"}</button></div>
       </form> : null}
       {confirmDelete ? <div className="space-y-3" role="group" aria-label="Confirm task deletion">

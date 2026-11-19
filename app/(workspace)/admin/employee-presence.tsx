@@ -94,7 +94,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
 
   return (
     <div className="divide-y divide-white/[0.08]">
-      {error ? <p role="alert" className="mb-3 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{error} Showing the last known status.</p> : null}
+      {error ? <p role="alert" className="feedback-error mb-3 rounded-xl border px-3 py-2 text-xs">{error} Showing the last known status.</p> : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, email, employee ID…" aria-label="Search registered users" className="soft-input h-10 w-full max-w-md rounded-xl px-3 text-sm" />
         <select aria-label="Filter users by role" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value as Employee["role"] | "ALL"); setPage(1); }} className="soft-input h-10 rounded-xl px-3 text-sm">
@@ -188,8 +188,8 @@ function EmployeeProfileEditor({ employeeId, profile, managers, onSaved }: {
       <label className="grid gap-1 text-[11px] text-white/45">Joining date<input type="date" value={joiningDate} onChange={(event) => setJoiningDate(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
       <label className="grid gap-1 text-[11px] text-white/45">Employment status<select value={employmentStatus} onChange={(event) => setEmploymentStatus(event.target.value as EmployeeProfile["employmentStatus"])} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option></select></label>
       <label className="grid gap-1 text-[11px] text-white/45 sm:col-span-2">Reporting manager<select value={managerId} onChange={(event) => setManagerId(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="">Unassigned</option>{managers.filter((manager) => manager.id !== employeeId).map((manager) => <option key={manager.id} value={manager.id}>{manager.name || manager.email}</option>)}</select></label>
-      <div className="flex items-end gap-3"><button disabled={pending} className="secondary-button h-9 px-3 text-xs font-semibold disabled:opacity-50">{pending ? "Saving…" : "Save profile"}</button>{saved ? <span role="status" className="pb-2 text-xs text-emerald-300">Saved</span> : null}</div>
-      {error ? <p role="alert" className="text-xs text-rose-300 sm:col-span-2">{error}</p> : null}
+      <div className="flex items-end gap-3"><button disabled={pending} className="secondary-button h-9 px-3 text-xs font-semibold disabled:opacity-50">{pending ? "Saving…" : "Save profile"}</button>{saved ? <span role="status" className="pb-2 text-xs feedback-success-text">Saved</span> : null}</div>
+      {error ? <p role="alert" className="text-xs feedback-error-text sm:col-span-2">{error}</p> : null}
     </form>
   </details>;
 }

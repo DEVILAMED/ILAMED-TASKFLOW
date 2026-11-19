@@ -120,6 +120,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ ok: false, error: `Invalid ${field}.` }, { status: 400 });
     }
     data[field] = date;
+    if (field === "reminderAt" && (date?.getTime() ?? null) !== (existing.reminderAt?.getTime() ?? null)) {
+      data.reminderProcessedAt = null;
+    }
     if (field === "dueDate") recurringDueDate = date;
   }
 
@@ -179,6 +182,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
     } else {
       await transaction.todoTask.update({ where: { id }, data });
+    }
+
+    if (data.reminderProcessedAt === null || payload?.isCompleted === true) {
+      // Keep old receipts for deduplication, but suppress obsolete desktop alerts.
+      await transaction.notification.updateMany({
+        where: { todoTaskId: id, type: "PERSONAL_TASK_REMINDER", desktopClaimedAt: null },
+        data: { desktopClaimedAt: new Date() },
+      });
     }
 
     if (myDayDate !== undefined) {

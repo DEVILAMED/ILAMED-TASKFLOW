@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 const HEARTBEAT_WRITE_INTERVAL_MS = 45_000;
 
 export async function POST() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ refreshSession: true });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }

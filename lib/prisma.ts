@@ -73,13 +73,15 @@ declare global {
 
 const globalForPrisma = globalThis as typeof globalThis & {
   ilamedPrisma?: ExtendedPrismaClient;
+  ilamedPrismaSchemaVersion?: number;
 };
 
 // A schema change can leave the development server holding an older generated client.
 const cachedPrisma = globalForPrisma.ilamedPrisma;
-export const prisma = cachedPrisma?.companyTaskRecurrence ? cachedPrisma : createPrismaClient();
+export const prisma = cachedPrisma && globalForPrisma.ilamedPrismaSchemaVersion === 2 ? cachedPrisma : createPrismaClient();
 if (cachedPrisma && cachedPrisma !== prisma) void cachedPrisma.$disconnect();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.ilamedPrisma = prisma;
+  globalForPrisma.ilamedPrismaSchemaVersion = 2;
 }
