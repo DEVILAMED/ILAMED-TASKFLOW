@@ -453,7 +453,7 @@ html[data-theme="dark"] .workspace-theme { --background: #121a28; --foreground: 
 .workspace-dialog-actions > button { min-height: 37px; padding: 7px 16px; font-size: 14px; }
 .workspace-cancel { color: var(--foreground); }
 .workspace-task-filters { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr); gap: 12px; padding: 16px; }
-.workspace-task-filters > .soft-input, .workspace-task-options .soft-input { width: 100%; min-width: 0; height: 36px; border-radius: 8px; padding: 0 12px; font-size: 13px; }
+.workspace-task-filters > .soft-input, .workspace-task-filters > label > .soft-input, .workspace-task-options .soft-input { width: 100%; min-width: 0; height: 36px; border-radius: 8px; padding: 0 12px; font-size: 13px; }
 .workspace-task-options { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
 .workspace-task-options > summary { width: fit-content; }
 .workspace-task-options > div { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 12px; }

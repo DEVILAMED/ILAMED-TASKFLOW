@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import PerformanceEvidence from "@/app/performance-evidence";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
 import { employeeDayKey, summarizeEmployeeWork } from "@/lib/employee-dashboard";
 import { MIN_REVIEWED_TASKS, REVIEW_PERIODS, REVIEW_RUBRIC, type ReviewEvidenceDetail, type ReviewPeriod, type ReviewQualitySummary } from "@/lib/review-quality";
@@ -7,7 +9,8 @@ import { countCompanyWorkdays, employeeLeaveDays, type LeaveDaysByEmployee } fro
 
 type Task = { status: string; priority: string; startDate?: Date | string | null; dueDate: Date | string | null; assigneeId: string | null };
 
-export default function PerformanceView({ title, description, personal = false, employee, tasks, quality, period, reviews, avatarUrl, leaveByEmployee }: {
+export default function PerformanceView({ title, description, personal = false, employee, tasks, quality, period, reviews, avatarUrl, leaveByEmployee, memberDetails }: {
+  memberDetails?: ReactNode;
   title: string;
   description: string;
   personal?: boolean;
@@ -25,7 +28,6 @@ export default function PerformanceView({ title, description, personal = false, 
   const { score } = quality;
   const latestReviewIds = new Set(quality.latestReviewIds);
   const evidence = reviews.filter(review => latestReviewIds.has(review.id)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const dateFormatter = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
   const population = new Set([...tasks.flatMap(task => task.assigneeId ? [task.assigneeId] : []), ...quality.employees.map(person => person.employeeId)]).size;
   const distribution = [
     { label: "Not started", count: tasks.filter(task => ["TODO", "ACCEPTED"].includes(task.status)).length },
@@ -42,6 +44,7 @@ export default function PerformanceView({ title, description, personal = false, 
 
   return <div className={`workspace-view ${personal ? "employee-performance" : ""}`}>
     <WorkspacePageHeading kicker="WORK QUALITY & ACTIVITY" title={title} description={description} action={employee ? <UserAvatar name={title} src={avatarUrl} size={48} /> : undefined} />
+    {memberDetails}
     <section className="workspace-surface performance-period">
       <div><h2>Review period</h2><p>{period.startDay} to {period.endDay} · India time</p>{workingDays !== null ? <p>{workingDays} working {workingDays === 1 ? "day" : "days"} in this period</p> : null}</div>
       <form action="/performance" method="get">
@@ -85,20 +88,7 @@ export default function PerformanceView({ title, description, personal = false, 
     <section className="workspace-surface"><h2>Current task totals</h2><div className="workspace-kpi-grid">{kpis.map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}</div>
       <p className="performance-context">Overdue counts open tasks past their leave-adjusted deadlines. Sundays and recorded leave do not count as working days.</p>
     </section>
-    <section className="workspace-surface performance-methodology">
-      <details><summary>View review evidence ({evidence.length} task assessments)</summary>
-        <p className="performance-context">Latest rated review per task and submitter in this period. {isTeam ? `Employees with fewer than ${MIN_REVIEWED_TASKS} reviewed tasks are included here for context and excluded from the team score.` : "Earlier reviews remain in your feedback history."}</p>
-        {evidence.length ? <div className="performance-evidence"><table>
-          <caption className="sr-only">Review evidence for the selected period; dates are in India time.</caption>
-          <thead><tr><th scope="col">Task and evidence</th>{isTeam ? <th scope="col">Employee</th> : null}<th scope="col">Rating</th><th scope="col">Reviewed</th></tr></thead>
-          <tbody>{evidence.map(review => <tr key={review.id}>
-            <td><strong>{review.taskTitle}</strong><p>{review.feedback}</p><small>{review.decision.replaceAll("_", " ").toLowerCase()} · {review.reviewerName}</small></td>
-            {isTeam ? <td><span className="user-identity"><UserAvatar name={review.employeeName} src={review.employeeAvatarUrl} size={24} />{review.employeeName}</span></td> : null}
-            <td>{review.rating}/5</td><td><time dateTime={new Date(review.createdAt).toISOString()}>{dateFormatter.format(new Date(review.createdAt))}</time></td>
-          </tr>)}</tbody>
-        </table></div> : <p className="performance-context">No rated reviews in this period.</p>}
-      </details>
-    </section>
+    <PerformanceEvidence evidence={evidence} isTeam={isTeam} />
     <section className="workspace-surface performance-methodology">
       <h2>How to interpret review quality</h2>
       <p>Ratings assess work against its agreed acceptance criteria. Work is credited to the person who submitted it, even after reassignment. Only the latest rated review for each task and submitter within the selected period counts.</p>

@@ -1,3 +1,4 @@
+import { taskDateKey } from "@/lib/task-dates";
 import { NextResponse } from "next/server";
 import { companyTaskHref } from "@/lib/company-task-links";
 import { NotificationType } from "@prisma/client";
@@ -10,7 +11,7 @@ import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 import { accessibleTodoListWhere } from "@/lib/todo-access";
 import { dispatchPersonalTaskReminders } from "@/services/personal-task-reminders";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
@@ -32,12 +33,34 @@ export async function GET() {
       { type: NotificationType.PERSONAL_TASK_REMINDER, todoTask: { is: { list: accessibleTodoListWhere(user.id) } } },
     ],
   };
+  const params = new URL(request.url).searchParams;
+  const from = taskDateKey(params.get("from"));
+  const to = taskDateKey(params.get("to"));
+  if ((params.get("from") && !from) || (params.get("to") && !to) || (from && to && from > to)) {
+    return NextResponse.json({ ok: false, error: "Choose a valid date range." }, { status: 400 });
+  }
+  const type = params.get("type");
+  if (type && !Object.values(NotificationType).includes(type as NotificationType)) {
+    return NextResponse.json({ ok: false, error: "Choose a valid notification type." }, { status: 400 });
+  }
+  const pageValue = Number(params.get("page") || 1);
+  const page = Number.isSafeInteger(pageValue) && pageValue > 0 ? Math.min(pageValue, 10000) : 1;
+  const filteredWhere: Prisma.NotificationWhereInput = {
+    ...where,
+    ...(type ? { type: type as NotificationType } : {}),
+    ...(params.get("read") === "unread" ? { readAt: null } : params.get("read") === "read" ? { readAt: { not: null } } : {}),
+    ...(from || to ? { createdAt: {
+      ...(from ? { gte: new Date(`${from}T00:00:00+05:30`) } : {}),
+      ...(to ? { lt: new Date(new Date(`${to}T00:00:00+05:30`).getTime() + 86400000) } : {}),
+    } } : {}),
+  };
   const [unreadCount, notifications] = await Promise.all([
     prisma.notification.count({ where: { ...where, readAt: null } }),
     prisma.notification.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      where: filteredWhere,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * 50,
+      take: 51,
       select: {
         id: true,
         type: true,
@@ -56,7 +79,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     unreadCount,
-    notifications: notifications.map((notification) => ({
+    hasMore: notifications.length > 50,
+    notifications: notifications.slice(0, 50).map((notification) => ({
       ...notification,
       actor: notification.actor ? withAvatarUrl(notification.actor) : null,
       href: notification.projectId === COMPANY_TASK_PROJECT_ID && notification.taskId ? companyTaskHref(user.role, user.id, notification.taskId, notification.task?.assigneeId ?? null, notification.type === "TASK_SUBMITTED") : notification.href,

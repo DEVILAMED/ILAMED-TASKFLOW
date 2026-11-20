@@ -105,6 +105,9 @@ export default function CompanyTaskBoard({
   const setPriorityFilter = (value: string) => setParam("priority", value);
   const dueFilter = params.get("due") || "ALL";
   const setDueFilter = (value: string) => setParam("due", value);
+  const from = taskDateKey(params.get("from")) ?? "";
+  const to = taskDateKey(params.get("to")) ?? "";
+  const invalidDateRange = Boolean(from && to && from > to);
   const view: TaskView = params.get("view") === "board" ? "board" : params.get("view") === "calendar" ? "calendar" : "list";
   const setView = (value: TaskView) => setParam("view", value);
   const sort = params.get("sort") || "due";
@@ -133,6 +136,10 @@ export default function CompanyTaskBoard({
     };
   });
   const activeTask = scheduledTasks.find((task) => task.id === expandedTaskId);
+  const activeSeriesTasks = activeTask?.recurrenceId
+    ? scheduledTasks.filter(task => task.recurrenceId === activeTask.recurrenceId)
+    : [];
+  const workDates = activeSeriesTasks.map(task => taskDateKey(task.recurrenceDate ?? task.dueDate)).filter((day): day is string => Boolean(day)).sort();
   const hasActiveTask = Boolean(activeTask);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -165,7 +172,8 @@ export default function CompanyTaskBoard({
     const matchesSearch = !query
       || task.title.toLocaleLowerCase().includes(query)
       || task.description?.toLocaleLowerCase().includes(query);
-    return matchesFocus(task, focus) && matchesSearch
+    return !invalidDateRange && (!from && !to || companyScheduleOverlaps(task.schedule, from || "0001-01-01", to || "9999-12-31", task.leaveDays))
+      && matchesFocus(task, focus) && matchesSearch
       && (statusFilter === "ALL" || task.status === statusFilter)
       && (employeeFilter === "ALL" || (employeeFilter === "UNASSIGNED" ? !task.assignee : task.assignee?.id === employeeFilter))
       && (priorityFilter === "ALL" || task.priority === priorityFilter)
@@ -394,19 +402,22 @@ export default function CompanyTaskBoard({
 
   return (
     <div className={`workspace-task-board flex flex-col gap-5 ${isAdmin ? "is-admin" : "is-employee"} ${view === "calendar" ? "is-calendar" : ""}`}>
-      {isAdmin || view !== "calendar" ? <div className="workspace-task-filters">
+      <div className="workspace-task-filters">
         <input type="search" aria-label="Search tasks" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks…" className="soft-input" />
         <select aria-label="Filter by status" value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setFocus("ALL"); }} className="soft-input"><option value="ALL">All statuses</option>{(Object.keys(statusLabels) as TaskStatus[]).map(status => <option key={status} value={status}>{statusLabels[status]}</option>)}</select>
         {isAdmin ? <select aria-label="Filter by employee" value={employeeFilter} onChange={event => setEmployeeFilter(event.target.value)} className="soft-input"><option value="ALL">All assignees</option><option value="UNASSIGNED">Unassigned</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select> : <select aria-label="Filter by priority" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} className="soft-input"><option value="ALL">All priorities</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>}
+        <label className="grid gap-1 text-xs">Work from<input type="date" className="soft-input" value={from} max={to || undefined} aria-invalid={invalidDateRange} onChange={event => setParam("from", event.target.value)} /></label>
+        <label className="grid gap-1 text-xs">Work to<input type="date" className="soft-input" value={to} min={from || undefined} aria-invalid={invalidDateRange} onChange={event => setParam("to", event.target.value)} /></label>
         <details className="workspace-task-options"><summary>More filters &amp; views</summary><div>
           <select aria-label="Filter by priority" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} className="soft-input"><option value="ALL">All priorities</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
           <select aria-label="Filter by schedule" value={dueFilter} onChange={event => setDueFilter(event.target.value)} className="soft-input"><option value="ALL">All dates</option><option value="OVERDUE">Overdue only</option><option value="TODAY">Scheduled today</option><option value="HAS_DUE_DATE">Has a schedule</option></select>
           <select aria-label="Task focus" value={focus} onChange={event => setFocus(event.target.value)} className="soft-input">{[["ALL","All work"],["ACTIVE","Active"],["CLOSED","Closed"],["COMPLETED","Completed"],["OVERDUE","Overdue"],["NOT_STARTED","Not started"],["IN_FLIGHT","In progress and held"],["CREATED_TODAY","Created today"],["OTHER_CLOSED","Other closed"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
           <select aria-label="Sort tasks" value={sort} onChange={event => setParam("sort",event.target.value)} className="soft-input"><option value="due">End date first</option><option value="priority">Priority first</option><option value="updated">Recently updated</option></select>
           <select aria-label="Task view" value={view} onChange={event => setView(event.target.value as TaskView)} className="soft-input"><option value="list">List view</option><option value="board">Board view</option><option value="calendar">Calendar view</option></select>
-          <button type="button" className="secondary-button" onClick={() => { for (const key of ["q","status","employee","priority","due","sort","focus"]) setParam(key,null); }}>Clear filters</button>
+          <button type="button" className="secondary-button" onClick={() => { for (const key of ["q","status","employee","priority","due","sort","focus","from","to"]) setParam(key,null); }}>Clear filters</button>
         </div></details>
-      </div> : null}
+      </div>
+      {invalidDateRange ? <p role="alert" className="text-sm text-rose-500">The end date must be on or after the start date.</p> : null}
       <section className="panel-card workspace-task-results">
         {expandedTaskId && !activeTask ? <p role="status" className="px-5 py-3 text-sm">This task is unavailable or is no longer assigned to you. <button type="button" onClick={() => setExpandedTaskId(null)} className="underline">Dismiss</button></p> : null}
         {error ? <p role="alert" className="feedback-error mx-5 mt-4 rounded-xl border px-4 py-3 text-sm">{error}</p> : null}
@@ -560,7 +571,28 @@ export default function CompanyTaskBoard({
             <h3 className="text-sm font-semibold">Daily submissions</h3>
             <p className="text-xs text-[var(--muted)]">One repeating task. Each day has its own checklist, submission, and approval.</p>
             <p className="text-xs text-[var(--muted)]">Repeat range: {task.recurrence?.startDate.slice(0, 10) ?? "Not set"} to {task.recurrence?.endDate?.slice(0, 10) ?? "No end date"}</p>
-            <label className="grid gap-1 text-xs">Work date<select className="soft-input h-10 rounded-lg px-2" value={task.id} onChange={event => void toggleComments(event.target.value)}>{scheduledTasks.filter(item => item.recurrenceId === task.recurrenceId).sort((a, b) => (b.recurrenceDate ?? b.dueDate ?? "").localeCompare(a.recurrenceDate ?? a.dueDate ?? "")).map(item => <option key={item.id} value={item.id}>{(item.recurrenceDate ?? item.dueDate)?.slice(0, 10) ?? "Original task"} — {statusLabels[item.status]}</option>)}</select></label>
+            <label className="grid gap-1 text-xs">Work date
+              <input
+                type="date"
+                className="soft-input h-10 rounded-lg px-2"
+                value={taskDateKey(task.recurrenceDate ?? task.dueDate) ?? ""}
+                min={workDates[0]}
+                max={workDates[workDates.length - 1]}
+                list="task-work-dates"
+                onChange={event => {
+                  const day = event.target.value;
+                  if (!day) return;
+                  const selectedTask = activeSeriesTasks.find(item => taskDateKey(item.recurrenceDate ?? item.dueDate) === day);
+                  if (!selectedTask) {
+                    setError("No daily task is scheduled for this work date. Choose another date.");
+                    return;
+                  }
+                  if (selectedTask.id !== task.id) toggleComments(selectedTask.id);
+                  else setError(null);
+                }}
+              />
+            </label>
+            <datalist id="task-work-dates">{activeSeriesTasks.map(item => <option key={item.id} value={taskDateKey(item.recurrenceDate ?? item.dueDate) ?? ""} label={statusLabels[item.status]} />)}</datalist>
           </section> : null}
           {isAdmin ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} onDelete={() => deleteTask(task)} /> : null}
           {isAdmin ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}

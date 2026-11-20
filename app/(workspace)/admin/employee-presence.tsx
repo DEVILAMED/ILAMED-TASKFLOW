@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserRoleControl from "./user-role-control";
@@ -55,11 +56,17 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Employee["role"] | "ALL">("ALL");
+  const [employmentFilter, setEmploymentFilter] = useState("");
+  const [accessFilter, setAccessFilter] = useState("");
+  const [managerFilter, setManagerFilter] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const filteredEmployees = initialEmployees.filter((employee) => {
     const query = search.trim().toLocaleLowerCase();
     return (roleFilter === "ALL" || employee.role === roleFilter)
+      && (!employmentFilter || (employmentFilter === "UNRECORDED" ? !employee.profile : employee.profile?.employmentStatus === employmentFilter))
+      && (!accessFilter || employee.isBlocked === (accessFilter === "blocked"))
+      && (!managerFilter || (managerFilter === "UNASSIGNED" ? !employee.profile?.managerId : employee.profile?.managerId === managerFilter))
       && (!query || [employee.name, employee.email, roleLabels[employee.role], employee.profile?.employeeCode, employee.profile?.designation]
         .some((value) => value?.toLocaleLowerCase().includes(query)));
   });
@@ -103,7 +110,11 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
           <option value="MANAGER">Managers</option>
           <option value="USER">Employees</option>
         </select>
-        <span className="text-xs text-white/40">{filteredEmployees.length} of {initialEmployees.length} accounts</span>
+        <select aria-label="Filter by employment status" value={employmentFilter} onChange={event => { setEmploymentFilter(event.target.value); setPage(1); }} className="soft-input h-10 rounded-xl px-3 text-sm"><option value="">All employment statuses</option><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="UNRECORDED">Not recorded</option></select>
+        <select aria-label="Filter by login access" value={accessFilter} onChange={event => { setAccessFilter(event.target.value); setPage(1); }} className="soft-input h-10 rounded-xl px-3 text-sm"><option value="">All login access</option><option value="allowed">Login allowed</option><option value="blocked">Blocked</option></select>
+        <select aria-label="Filter by reporting manager" value={managerFilter} onChange={event => { setManagerFilter(event.target.value); setPage(1); }} className="soft-input h-10 rounded-xl px-3 text-sm"><option value="">All reporting managers</option><option value="UNASSIGNED">Unassigned manager</option>{managers.map(manager => <option key={manager.id} value={manager.id}>{manager.name || manager.email}</option>)}</select>
+        <button type="button" className="secondary-button px-3 py-2 text-sm" onClick={() => { setSearch(""); setRoleFilter("ALL"); setEmploymentFilter(""); setAccessFilter(""); setManagerFilter(""); setPage(1); }}>Clear filters</button>
+        <span role="status" className="text-xs text-white/40">{filteredEmployees.length} of {initialEmployees.length} accounts</span>
       </div>
       {visibleEmployees.map((employee) => {
         const lastSeenAt = lastSeenById[employee.id] ?? null;
@@ -114,7 +125,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <UserAvatar name={employee.name || employee.email} src={employee.avatarUrl} />
-                <p className="text-sm font-medium text-white/80">{employee.name || "Unnamed user"}</p>
+                <Link href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="text-sm font-medium text-white/80 hover:underline">{employee.name || "Unnamed user"}</Link>
                 <span className="badge-pill text-[10px]">{roleLabels[employee.role]}</span>
                 {employee.leaveDays.includes(today) ? <span className="badge-pill text-[10px]">On leave today</span> : null}
                 {employee.id === currentUserId ? <span className="text-xs font-medium text-[var(--accent)]">You</span> : null}
@@ -146,7 +157,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
           </div>
         );
       })}
-      {!filteredEmployees.length ? <p role="status" className="py-6 text-sm text-[var(--muted)]">No registered users match your search and role filter.</p> : null}
+      {!filteredEmployees.length ? <p role="status" className="py-6 text-sm text-[var(--muted)]">No registered users match these filters.</p> : null}
       {pageCount > 1 ? <div className="mt-3 flex items-center justify-between"><p className="text-xs text-white/40">Page {currentPage} of {pageCount}</p><div className="flex gap-2"><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Previous</button><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Next</button></div></div> : null}
     </div>
   );

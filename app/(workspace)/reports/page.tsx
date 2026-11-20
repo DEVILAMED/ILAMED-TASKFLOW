@@ -72,7 +72,7 @@ export default async function ReportsPage() {
       createdAt: true,
       startDate: true,
       dueDate: true,
-      assignee: { select: { id: true, name: true, email: true } },
+      assignee: { select: { id: true, name: true, email: true, employeeProfile: { select: { department: { select: { id: true, name: true } } } } } },
     },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
   });
@@ -133,7 +133,7 @@ export default async function ReportsPage() {
 
   return (
     <>
-      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), status: task.status, priority: task.priority, startDate: task.startDate ? formatDueDate(task.startDate) : "Not set", deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", workingDays: task.workingDays, createdAt: task.createdAt.toISOString() }))} />
+      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), assigneeId: task.assignee?.id ?? "UNASSIGNED", departmentId: task.assignee?.employeeProfile?.department?.id ?? "UNASSIGNED", department: task.assignee?.employeeProfile?.department?.name ?? "Unassigned department", dueDate: task.dueDate, status: task.status, priority: task.priority, startDate: task.startDate ? formatDueDate(task.startDate) : "Not set", deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", workingDays: task.workingDays, createdAt: task.createdAt.toISOString() }))} />
       <details className="workspace-additional"><summary>View all-time task analytics</summary>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <section className="panel-card rounded-3xl p-5 sm:p-7">
