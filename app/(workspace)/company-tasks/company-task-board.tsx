@@ -32,6 +32,7 @@ type CompanyTask = CompanyTaskRepeatInfo & {
   createdAt: string;
   updatedAt: string;
   assignee: Employee | null;
+  assignedBy: { id: string; name: string | null; email: string } | null;
   checklistItems: ChecklistItem[];
 };
 
@@ -62,6 +63,10 @@ const priorityLabels: Record<TaskPriority, string> = {
 
 function employeeLabel(employee: Employee | null) {
   return employee ? employee.name || employee.email : "Unassigned";
+}
+
+function TaskAssigner({ task }: { task: CompanyTask }) {
+  return <p className="mt-2 text-xs text-[var(--muted)]">Assigned by: {task.assignedBy ? task.assignedBy.name || task.assignedBy.email : task.assignee ? "Not recorded" : "Unassigned"}</p>;
 }
 
 export default function CompanyTaskBoard({
@@ -408,7 +413,7 @@ export default function CompanyTaskBoard({
           isAdmin ? <TaskCalendar tasks={visibleTasks} onOpen={(task) => void toggleComments(task.id)} /> : <EmployeeTaskCalendar rangeMode leaveDays={employeeLeaveDays(leaveByEmployee, employeeId)} tasks={visibleTasks.map(task => ({ ...task, ...task.schedule }))} onOpen={task => void toggleComments(task.id)} />
         ) : (
           <>
-          <div className="grid gap-3 p-4 md:hidden">{visibleTasks.map((task) => <article key={task.id} className="rounded-xl border border-[var(--stroke)] p-4"><button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)]">{task.title}</button><p className="my-3 text-xs text-[var(--muted)]">{statusLabels[task.status]} / {formatCompanyTaskSchedule(task.schedule)} / {priorityLabels[task.priority]}</p><TaskChecklistProgress title={task.title} items={task.checklistItems} className="mb-3" />{isAdmin ? <p className="text-xs text-[var(--muted)]">{employeeLabel(task.assignee)}</p> : <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} />}</article>)}</div>
+          <div className="grid gap-3 p-4 md:hidden">{visibleTasks.map((task) => <article key={task.id} className="rounded-xl border border-[var(--stroke)] p-4"><button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)]">{task.title}</button><TaskAssigner task={task} /><p className="my-3 text-xs text-[var(--muted)]">{statusLabels[task.status]} / {formatCompanyTaskSchedule(task.schedule)} / {priorityLabels[task.priority]}</p><TaskChecklistProgress title={task.title} items={task.checklistItems} className="mb-3" />{isAdmin ? <p className="text-xs text-[var(--muted)]">{employeeLabel(task.assignee)}</p> : <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} />}</article>)}</div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-left">
               <thead className="text-[11px] uppercase tracking-wider text-white/35">
@@ -429,6 +434,7 @@ export default function CompanyTaskBoard({
                     <tr>
                       <td className="max-w-[30rem] px-5 py-4">
                         <button type="button" onClick={() => void toggleComments(task.id)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>
+                        <TaskAssigner task={task} />
                         {task.recurrenceId ? <span className="badge-pill ml-2 text-[10px]">Daily{task.recurrenceDate ? ` · ${task.recurrenceDate.slice(0, 10)}` : ""}</span> : null}
                         {task.description ? <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-white/40">{task.description}</p> : null}
                         {task.checklistItems.length ? (
@@ -553,6 +559,7 @@ export default function CompanyTaskBoard({
           <p className="text-xs text-[var(--muted)]">Checklist completion records steps finished; approval is a separate manager decision.</p>
           <p className="whitespace-pre-wrap text-sm">{task.description || "No additional instructions."}</p>
           {task.assignee ? <p className="user-identity text-sm"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} />{employeeLabel(task.assignee)}</p> : null}
+          <TaskAssigner task={task} />
           {isAdmin && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
           {isAdmin && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
           {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id || task.status === "SUBMITTED_FOR_REVIEW"} title={task.status === "SUBMITTED_FOR_REVIEW" ? "Review the pending submission or cancel the task before changing its assignee." : undefined} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
@@ -632,6 +639,7 @@ function KanbanBoard({ tasks, isAdmin, pendingId, onUpdate, onOpen }: {
       <div className="grid content-start gap-2">{tasks.filter((task) => column.matches.includes(task.status)).map((task) => <article key={task.id} className="rounded-lg border border-[var(--stroke)] bg-[var(--panel)] p-3 shadow-sm">
         <button type="button" onClick={() => onOpen(task)} className="text-left text-sm font-semibold text-[var(--accent)] hover:underline">{task.title}</button>{task.recurrenceId ? <span className="badge-pill ml-2 text-[10px]">Daily{task.recurrenceDate ? ` · ${task.recurrenceDate.slice(0, 10)}` : ""}</span> : null}{task.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{task.description}</p> : null}
         <TaskChecklistProgress title={task.title} items={task.checklistItems} className="mt-3" />
+        <TaskAssigner task={task} />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${task.priority === "HIGH" ? "bg-rose-50 text-rose-600" : task.priority === "MEDIUM" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priorityLabels[task.priority]}</span>{task.dueDate ? <time className="text-[10px] text-[var(--muted)]">{formatCompanyTaskSchedule(task.schedule)}</time> : null}</div>
         {task.assignee ? <div className="mt-2 flex min-w-0 items-center gap-2"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} size={24} /><p className="truncate text-[11px] text-[var(--muted)]">{employeeLabel(task.assignee)}</p></div> : null}
         {!isAdmin ? <div className="mt-3"><TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={onUpdate} /></div> : null}

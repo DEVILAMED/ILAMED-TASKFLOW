@@ -16,6 +16,7 @@ type TeamTask = {
   workingDays: number | null;
   checklistItems: { isCompleted: boolean }[];
   assignee: { name: string | null; email: string; avatarUrl?: string | null } | null;
+  assignedBy: { name: string | null; email: string } | null;
   comments: { id: string; content: string }[];
 };
 
@@ -66,6 +67,7 @@ export default function TeamTaskControls({ tasks }: { tasks: TeamTask[] }) {
         {["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED", "ON_HOLD"].includes(task.status) ? <button type="button" disabled={pending} onClick={() => void changeStatus(task)} className={`${task.status === "ON_HOLD" ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{task.status === "ON_HOLD" ? "Resume task" : "Put on hold"}</button> : null}
       </div>
       <p className="mt-2 text-xs text-[var(--muted)]">{formatCompanyTaskSchedule(task)}</p>
+      <p className="mt-2 text-xs text-[var(--muted)]">Assigned by: {task.assignedBy ? task.assignedBy.name || task.assignedBy.email : "Not recorded"}</p>
       <TaskChecklistProgress title={task.title} items={task.checklistItems} className="mt-3 max-w-xs" />
       {task.description ? <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">{task.description}</p> : null}
       {task.comments.map((comment) => <p key={comment.id} className="mt-2 whitespace-pre-wrap rounded-lg bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted)]">{comment.content}</p>)}

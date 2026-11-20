@@ -12,6 +12,7 @@ export async function getEmployeeWorkspaceData(userId: string) {
       ...companyTaskRepeatSelect,
       id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, createdAt: true, updatedAt: true,
       assignee: { select: USER_IDENTITY_SELECT },
+      assignedBy: { select: { id: true, name: true, email: true } },
       checklistItems: { orderBy: { position: "asc" }, select: { id: true, title: true, isCompleted: true, position: true } },
     }, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }] }),
     prisma.taskReview.findMany({ where: { submission: { submittedById: userId, task: { projectId: COMPANY_TASK_PROJECT_ID } } }, orderBy: { createdAt: "desc" }, select: {

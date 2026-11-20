@@ -37,6 +37,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         createdAt: true,
         updatedAt: true,
         assignee: { select: { ...USER_IDENTITY_SELECT, employeeProfile: { select: { departmentId: true } } } },
+        assignedBy: { select: { id: true, name: true, email: true } },
         checklistItems: {
           orderBy: { position: "asc" },
           select: { id: true, title: true, isCompleted: true, position: true },

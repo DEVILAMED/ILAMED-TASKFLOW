@@ -21,6 +21,7 @@ const taskSelect = {
   createdAt: true,
   updatedAt: true,
   assignee: { select: USER_IDENTITY_SELECT },
+  assignedBy: { select: { id: true, name: true, email: true } },
   checklistItems: {
     orderBy: { position: "asc" },
     select: { id: true, title: true, isCompleted: true, position: true },
@@ -154,6 +155,7 @@ export async function POST(request: Request) {
         ...(recurrence ? { recurrenceId: recurrence.id, recurrenceDate: firstDate } : {}),
         projectId: project.id,
         assigneeId: assignee.id,
+        assignedById: user.id,
         checklistItems: {
           create: checklistItems.map((item, position) => ({
             title: item.trim(),

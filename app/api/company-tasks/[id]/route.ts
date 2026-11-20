@@ -172,6 +172,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         ...(status === undefined ? {} : { status: status as TaskStatus }),
         ...(priority === undefined ? {} : { priority: priority as "LOW" | "MEDIUM" | "HIGH" }),
         ...(nextAssigneeId === undefined ? {} : { assigneeId: nextAssigneeId }),
+        ...(nextAssigneeId !== undefined && nextAssigneeId !== existing.assigneeId
+          ? { assignedById: nextAssigneeId ? user.id : null } : {}),
       },
       select: {
         ...companyTaskRepeatSelect,
@@ -186,6 +188,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         updatedAt: true,
         assigneeId: true,
         assignee: { select: USER_IDENTITY_SELECT },
+        assignedBy: { select: { id: true, name: true, email: true } },
         checklistItems: {
           orderBy: { position: "asc" },
           select: { id: true, title: true, isCompleted: true, position: true },
