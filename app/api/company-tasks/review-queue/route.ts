@@ -1,3 +1,4 @@
+import { submissionAttachmentSelect, submissionAttachmentUrl } from "@/lib/submission-attachments";
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
@@ -29,6 +30,7 @@ export async function GET() {
       assignee: { select: USER_IDENTITY_SELECT },
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: {
         id: true, notes: true, createdAt: true, submittedBy: { select: USER_IDENTITY_SELECT },
+        attachments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionAttachmentSelect },
         images: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionImageSelect },
       } },
     },
@@ -41,6 +43,7 @@ export async function GET() {
       id: task.submissions[0].id, notes: task.submissions[0].notes, createdAt: task.submissions[0].createdAt.toISOString(),
       submitter: task.submissions[0].submittedBy.name || task.submissions[0].submittedBy.email,
       submitterAvatarUrl: userAvatarUrl(task.submissions[0].submittedBy.id, task.submissions[0].submittedBy.avatar),
+      attachments: (task.submissions[0].attachments ?? []).map(file => ({ ...file, url: submissionAttachmentUrl(task.id, task.submissions[0].id, file.id) })),
       images: task.submissions[0].images.map((image) => ({ ...image, url: submissionImageUrl(task.id, task.submissions[0].id, image.id) })),
     } : null,
   })) });

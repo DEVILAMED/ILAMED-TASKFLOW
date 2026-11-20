@@ -8,7 +8,9 @@ import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import { canChangeCompanyTaskStatus } from "@/lib/company-task-workflow";
 import { deleteManagedCompanyTask, parseCompanyTaskDetails, validateCompanyTaskUpdateFields, validateCompanyTaskDateRange } from "@/lib/company-task-management";
 import { companyTaskAccessWhere } from "@/lib/company-task-access";
-import { MAX_SUBMISSION_BODY_BYTES, validateSubmissionImages } from "@/lib/submission-images";
+import { validateSubmissionImages } from "@/lib/submission-images";
+import { MAX_SUBMISSION_UPLOAD_BYTES, validateSubmissionAttachments } from "@/lib/submission-attachments";
+import { InvalidSubmissionAttachmentError, prepareSubmissionAttachment } from "@/lib/prepare-submission-attachment";
 import { readLimitedFormData, UploadTooLargeError } from "@/lib/limited-form-data";
 import { InvalidSubmissionImageError, prepareSubmissionImage } from "@/lib/prepare-submission-image";
 import { companyTaskRepeatSelect, serializeTaskRepeat } from "@/lib/company-task-repeat";
@@ -26,7 +28,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (multipart) {
     // Authorize before buffering or decoding an upload, then recheck in the transaction.
     if (user.role === UserRole.ADMIN) {
-      return NextResponse.json({ ok: false, error: "Only the assigned employee can submit completion images." }, { status: 403 });
+      return NextResponse.json({ ok: false, error: "Only the assigned employee can submit completion files." }, { status: 403 });
     }
     const task = await prisma.task.findFirst({
       where: { id, projectId: COMPANY_TASK_PROJECT_ID, assigneeId: user.id },
@@ -40,27 +42,32 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   let payload: Record<string, unknown>;
   const imageFiles: File[] = [];
+  const attachmentFiles: File[] = [];
   try {
     if (multipart) {
-      const form = await readLimitedFormData(request, MAX_SUBMISSION_BODY_BYTES);
+      const form = await readLimitedFormData(request, MAX_SUBMISSION_UPLOAD_BYTES);
       payload = {};
       for (const [key, value] of form) {
         if (key === "images" && value instanceof File) imageFiles.push(value);
+        else if (key === "attachments" && value instanceof File) attachmentFiles.push(value);
         else if (["status", "notes"].includes(key) && typeof value === "string" && !Object.hasOwn(payload, key)) payload[key] = value;
         else throw new Error("Invalid submission field.");
       }
-      if (payload.status !== TaskStatus.SUBMITTED_FOR_REVIEW) throw new Error("Images require a task submission.");
+      if (payload.status !== TaskStatus.SUBMITTED_FOR_REVIEW) throw new Error("Files require a task submission.");
     } else {
       const body: unknown = await request.json();
       if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid request body.");
       payload = body as Record<string, unknown>;
     }
   } catch (error) {
-    if (error instanceof UploadTooLargeError) return NextResponse.json({ ok: false, error: error.message }, { status: 413 });
+    if (error instanceof UploadTooLargeError) return NextResponse.json({ ok: false, error: "The upload is too large. Attach up to five images (5 MB each) and five files (10 MB each)." }, { status: 413 });
     return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
   }
   const imageError = validateSubmissionImages(imageFiles);
   if (imageError) return NextResponse.json({ ok: false, error: imageError }, { status: 400 });
+
+  const attachmentError = validateSubmissionAttachments(attachmentFiles);
+  if (attachmentError) return NextResponse.json({ ok: false, error: attachmentError }, { status: 400 });
 
   const notes = typeof payload?.notes === "string" ? payload.notes.trim() : "";
   if ((payload?.notes !== undefined && typeof payload.notes !== "string") || notes.length > 2000) {
@@ -118,11 +125,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const images: Awaited<ReturnType<typeof prepareSubmissionImage>>[] = [];
+  const attachments: Awaited<ReturnType<typeof prepareSubmissionAttachment>>[] = [];
   try {
     // Sequential decoding keeps peak memory bounded on a small VPS.
     for (const file of imageFiles) images.push(await prepareSubmissionImage(file));
+    for (const file of attachmentFiles) attachments.push(await prepareSubmissionAttachment(file));
   } catch (error) {
-    if (error instanceof InvalidSubmissionImageError) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    if (error instanceof InvalidSubmissionImageError || error instanceof InvalidSubmissionAttachmentError) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     throw error;
   }
   const task = await prisma.$transaction(async (tx) => {
@@ -228,6 +237,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           data: {
             taskId: existing.id, submittedById: user.id, notes: notes || null,
             ...(images.length ? { images: { create: images } } : {}),
+            ...(attachments.length ? { attachments: { create: attachments } } : {}),
           },
         });
         // Query users so managers shared across teams receive one notification.

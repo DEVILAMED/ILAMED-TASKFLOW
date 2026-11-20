@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SubmissionAttachmentList from "@/app/submission-attachment-list";
+import type { SubmissionAttachment } from "@/lib/submission-attachments";
 import SubmissionImageGallery from "@/app/submission-image-gallery";
 import type { SubmissionImage } from "@/lib/submission-images";
 
-type Submission = { id: string; notes: string | null; createdAt: string; submitter: string; images: SubmissionImage[] };
+type Submission = { id: string; notes: string | null; createdAt: string; submitter: string; attachments?: SubmissionAttachment[]; images: SubmissionImage[] };
 
 export default function TaskSubmissionHistory({ taskId, updatedAt }: { taskId: string; updatedAt: string }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -42,7 +44,8 @@ export default function TaskSubmissionHistory({ taskId, updatedAt }: { taskId: s
       <time dateTime={submission.createdAt} className="mt-1 block text-xs text-[var(--muted)]">{new Date(submission.createdAt).toLocaleString()}</time>
       {submission.notes ? <p className="mt-2 whitespace-pre-wrap text-sm">{submission.notes}</p> : null}
       <SubmissionImageGallery images={submission.images} />
-      {!submission.notes && !submission.images.length ? <p className="mt-2 text-xs text-[var(--muted)]">Submitted without notes or images.</p> : null}
+      <SubmissionAttachmentList attachments={submission.attachments} />
+      {!submission.notes && !submission.images.length && !submission.attachments?.length ? <p className="mt-2 text-xs text-[var(--muted)]">Submitted without notes or attachments.</p> : null}
     </article>)}</div> : null}
   </section>;
 }

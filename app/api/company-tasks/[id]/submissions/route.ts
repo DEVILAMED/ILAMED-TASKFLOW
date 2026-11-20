@@ -1,3 +1,4 @@
+import { submissionAttachmentSelect, submissionAttachmentUrl } from "@/lib/submission-attachments";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -16,6 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       select: {
         id: true, notes: true, createdAt: true,
         submittedBy: { select: { name: true, email: true } },
+        attachments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionAttachmentSelect },
         images: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionImageSelect },
       },
     } },
@@ -24,6 +26,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ ok: true, submissions: task.submissions.map((submission) => ({
     id: submission.id, notes: submission.notes, createdAt: submission.createdAt.toISOString(),
     submitter: submission.submittedBy.name || submission.submittedBy.email,
+    attachments: (submission.attachments ?? []).map(file => ({ ...file, url: submissionAttachmentUrl(id, submission.id, file.id) })),
     images: submission.images.map((image) => ({ ...image, url: submissionImageUrl(id, submission.id, image.id) })),
   })) }, { headers: { "Cache-Control": "private, no-store" } });
 }

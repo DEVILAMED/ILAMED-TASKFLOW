@@ -94,7 +94,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
   }, [refreshPresence]);
 
   return (
-    <div className="divide-y divide-white/[0.08]">
+    <div className="space-y-4">
       {error ? <p role="alert" className="feedback-error mb-3 rounded-xl border px-3 py-2 text-xs">{error} Showing the last known status.</p> : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, email, employee ID…" aria-label="Search registered users" className="soft-input h-10 w-full max-w-md rounded-xl px-3 text-sm" />
@@ -110,38 +110,42 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
         <button type="button" className="secondary-button px-3 py-2 text-sm" onClick={() => { setSearch(""); setRoleFilter("ALL"); setEmploymentFilter(""); setAccessFilter(""); setManagerFilter(""); setPage(1); }}>Clear filters</button>
         <span role="status" className="text-xs text-white/40">{filteredEmployees.length} of {initialEmployees.length} accounts</span>
       </div>
-      {visibleEmployees.map((employee) => {
-        const lastSeenAt = lastSeenById[employee.id] ?? null;
-        const online = !employee.isBlocked && lastSeenAt !== null && now - new Date(lastSeenAt).getTime() <= ONLINE_WINDOW_MS;
-        return (
-          <div key={employee.id} className="border-b border-white/[0.08] py-3 last:border-0">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <UserAvatar name={employee.name || employee.email} src={employee.avatarUrl} />
-                <Link href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="text-sm font-medium text-white/80 hover:underline">{employee.name || "Unnamed user"}</Link>
-                <span className="badge-pill text-[10px]">{roleLabels[employee.role]}</span>
-                {employee.leaveDays.includes(today) ? <span className="badge-pill text-[10px]">On leave today</span> : null}
-                {employee.id === currentUserId ? <span className="text-xs font-medium text-[var(--accent)]">You</span> : null}
+      <div className="workspace-team-grid">
+        {visibleEmployees.map(employee => {
+          const lastSeenAt = lastSeenById[employee.id] ?? null;
+          const online = !employee.isBlocked && lastSeenAt !== null && now - new Date(lastSeenAt).getTime() <= ONLINE_WINDOW_MS;
+          const name = employee.name || "Unnamed user";
+          const department = departments.find(item => item.id === employee.profile?.departmentId)?.name || "Unassigned department";
+          const href = `/performance?employee=${encodeURIComponent(employee.id)}`;
+          return <article key={employee.id} className="flex h-full min-w-0 flex-col rounded-xl border border-[var(--stroke)] bg-[var(--panel)] p-5 transition-colors hover:border-[var(--accent)]">
+            <div className="flex min-w-0 items-center gap-3">
+              <UserAvatar name={employee.name || employee.email} src={employee.avatarUrl} size={48} />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-semibold text-[var(--foreground)]" title={name}><Link href={href} className="hover:underline">{name}</Link></h2>
+                <p className="truncate text-xs text-[var(--muted)]" title={employee.email}>{employee.email}</p>
               </div>
-              <p className="mt-1 text-xs text-white/40">{employee.email}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">{employee.profile?.designation || roleLabels[employee.role]} / {departments.find(department => department.id === employee.profile?.departmentId)?.name || "Unassigned department"}{employee.isBlocked ? " / Login blocked" : ""}</p>
-              <p className="mt-2 flex items-center gap-2 text-xs">
-                <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-slate-500"}`} />
-                <span className={online ? "font-medium text-emerald-300" : "text-white/45"}>
-                  {online ? "Online" : "Offline"}
-                </span>
-                <span className="text-white/35">{formatLastSeen(lastSeenAt, now)}</span>
-              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              {employee.taskSummary ? <div className="flex gap-4 text-center text-xs text-[var(--muted)]">{[[employee.taskSummary.assigned, "Tasks"], [employee.taskSummary.completed, "Completed"], [employee.taskSummary.pending, "Pending"]].map(([count, label]) => <div key={label}><strong className="block text-base text-[var(--foreground)]">{count}</strong>{label}</div>)}</div> : null}
-              <Link href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="secondary-button px-3 py-2 text-sm">View profile</Link>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="badge-pill text-[10px]">{roleLabels[employee.role]}</span>
+              {employee.id === currentUserId ? <span className="badge-pill text-[10px] text-[var(--accent)]">You</span> : null}
+              {employee.leaveDays.includes(today) ? <span className="badge-pill text-[10px]">On leave today</span> : null}
+              {employee.isBlocked ? <span className="badge-pill text-[10px] text-rose-500">Login blocked</span> : null}
             </div>
+            <div className="mt-3 text-sm">
+              <p className="break-words text-[var(--foreground)]">{employee.profile?.designation || roleLabels[employee.role]}</p>
+              <p className="mt-1 break-words text-xs text-[var(--muted)]">{department}</p>
             </div>
-          </div>
-        );
-      })}
+            <div className="my-4 text-xs text-[var(--muted)]">
+              <p className="flex items-center gap-2"><span aria-hidden="true" className={`h-2 w-2 rounded-full ${online ? "bg-emerald-500" : "bg-slate-400"}`} /><span>{online ? "Online" : "Offline"}</span></p>
+              <p className="mt-1">{formatLastSeen(lastSeenAt, now)}</p>
+            </div>
+            <div className="mt-auto">
+              {employee.taskSummary ? <dl className="mb-4 grid grid-cols-3 gap-2 border-t border-[var(--stroke)] pt-4 text-center">{[[employee.taskSummary.assigned, "Tasks"], [employee.taskSummary.completed, "Completed"], [employee.taskSummary.pending, "Pending"]].map(([count, label]) => <div key={label}><dt className="text-xs text-[var(--muted)]">{label}</dt><dd className="mt-1 text-lg font-semibold text-[var(--foreground)]">{count}</dd></div>)}</dl> : null}
+              <Link href={href} className="secondary-button flex w-full items-center justify-center px-3 py-2 text-sm">View profile</Link>
+            </div>
+          </article>;
+        })}
+      </div>
       {!filteredEmployees.length ? <p role="status" className="py-6 text-sm text-[var(--muted)]">No registered users match these filters.</p> : null}
       {pageCount > 1 ? <div className="mt-3 flex items-center justify-between"><p className="text-xs text-white/40">Page {currentPage} of {pageCount}</p><div className="flex gap-2"><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Previous</button><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Next</button></div></div> : null}
     </div>

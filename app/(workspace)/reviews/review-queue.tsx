@@ -2,6 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import SubmissionAttachmentList from "@/app/submission-attachment-list";
+import type { SubmissionAttachment } from "@/lib/submission-attachments";
 import SubmissionImageGallery from "@/app/submission-image-gallery";
 import type { SubmissionImage } from "@/lib/submission-images";
 import UserAvatar from "@/app/user-avatar";
@@ -11,7 +13,7 @@ type ReviewTask = {
   id: string; title: string; description: string | null; dueDate: string | null;
   recurrenceDate?: string | null;
   assignee: { id: string; name: string | null; email: string; avatarUrl?: string | null } | null;
-  submission: { id: string; notes: string | null; createdAt: string; submitter: string; submitterAvatarUrl?: string | null; images: SubmissionImage[] } | null;
+  submission: { id: string; notes: string | null; createdAt: string; submitter: string; submitterAvatarUrl?: string | null; attachments?: SubmissionAttachment[]; images: SubmissionImage[] } | null;
 };
 
 export default function ReviewQueue() {
@@ -109,7 +111,7 @@ export default function ReviewQueue() {
       {task.description ? <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{task.description}</p> : null}
       {task.recurrenceDate ? <p className="mt-2 text-sm font-medium text-[var(--accent)]">Daily submission for {task.recurrenceDate.slice(0, 10)}</p> : null}
       {task.submission?.notes ? <p className="mt-3 rounded-xl bg-white/[0.04] p-3 text-sm text-white/65">{task.submission.notes}</p> : null}
-      {task.submission ? <SubmissionImageGallery images={task.submission.images} /> : null}
+      {task.submission ? <><SubmissionImageGallery images={task.submission.images} /><SubmissionAttachmentList attachments={task.submission.attachments} /></> : null}
       <div className="mt-4 grid gap-3">
         <label className="grid min-w-0 gap-1 text-xs text-white/50">Feedback (optional)<textarea className="soft-input min-h-10 rounded-lg px-3 py-2 text-sm" maxLength={2000} value={feedback[reviewKey] ?? ""} onChange={(event) => setFeedback((current) => ({ ...current, [reviewKey]: event.target.value }))} placeholder="Add feedback if needed" /></label>
       </div>

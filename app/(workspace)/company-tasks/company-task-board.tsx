@@ -8,6 +8,7 @@ import { getChecklistProgress } from "@/lib/task-progress";
 import { taskDateKey, taskIsScheduledOn } from "@/lib/task-dates";
 import { companyScheduleOverlaps, companyTaskSchedule, employeeDayKey, employeeLeaveDays, formatCompanyTaskSchedule, isCompanyTaskOverdue, isCompanyWorkday, isSunday, type LeaveDaysByEmployee } from "@/lib/company-workdays";
 import CompanyTaskEditor, { type CompanyTaskChanges } from "@/app/company-task-editor";
+import SubmissionFilePicker from "@/app/submission-file-picker";
 import SubmissionImagePicker from "@/app/submission-image-picker";
 import TaskSubmissionHistory from "@/app/task-submission-history";
 import UserAvatar from "@/app/user-avatar";
@@ -42,7 +43,7 @@ type ScheduledCompanyTask = CompanyTask & {
   leaveDays: readonly string[];
   overdue: boolean;
 };
-type TaskUpdateHandler = (task: CompanyTask, status: TaskAction, notes?: string, images?: File[]) => Promise<boolean>;
+type TaskUpdateHandler = (task: CompanyTask, status: TaskAction, notes?: string, images?: File[], attachments?: File[]) => Promise<boolean>;
 
 const statusLabels: Record<TaskStatus, string> = {
   TODO: "Not started",
@@ -333,18 +334,19 @@ export default function CompanyTaskBoard({
     }
   }
 
-  async function updateStatus(task: CompanyTask, status: TaskAction, notes?: string, images: File[] = []) {
+  async function updateStatus(task: CompanyTask, status: TaskAction, notes?: string, images: File[] = [], attachments: File[] = []) {
     if (pendingId) return false;
     setPendingId(task.id);
     setError(null);
     setNotice(null);
     try {
       let form: FormData | undefined;
-      if (status === "SUBMITTED_FOR_REVIEW" && images.length) {
+      if (status === "SUBMITTED_FOR_REVIEW" && (images.length || attachments.length)) {
         form = new FormData();
         form.set("status", status);
         if (notes) form.set("notes", notes);
         for (const image of images) form.append("images", image);
+        for (const file of attachments) form.append("attachments", file);
       }
       const response = await fetch(`/api/company-tasks/${task.id}`, {
         method: "PATCH",
@@ -739,6 +741,7 @@ function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: 
   const [decision, setDecision] = useState<TaskAction | null>(null);
   const [notes, setNotes] = useState("");
   const [images, setImages] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const actions: Partial<Record<TaskStatus, [TaskAction, string][]>> = {
     TODO: [["IN_PROGRESS", "Start task"], ["REPORT_BLOCKER", "Report blocker"]],
     ACCEPTED: [["IN_PROGRESS", "Start task"], ["REPORT_BLOCKER", "Report blocker"]],
@@ -747,12 +750,12 @@ function TaskActions({ task, pending, onUpdate }: { task: CompanyTask; pending: 
   };
   const available = actions[task.status] ?? [];
   return <div className="flex flex-wrap gap-2">
-    {decision && available.some(([action]) => action === decision) ? <form className="w-full space-y-3" onSubmit={async (event) => { event.preventDefault(); if (await onUpdate(task, decision, notes.trim(), images)) { setDecision(null); setNotes(""); setImages([]); } }}>
+    {decision && available.some(([action]) => action === decision) ? <form className="w-full space-y-3" onSubmit={async (event) => { event.preventDefault(); if (await onUpdate(task, decision, notes.trim(), images, attachments)) { setDecision(null); setNotes(""); setImages([]); setAttachments([]); } }}>
       <label className="grid gap-2 text-xs">{decision === "REPORT_BLOCKER" ? "What is blocking this task?" : "Submission notes (optional)"}
         <textarea className="soft-input w-full rounded-lg p-2 text-sm" disabled={pending} required={decision === "REPORT_BLOCKER"} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} />
       </label>
-      {decision === "SUBMITTED_FOR_REVIEW" ? <SubmissionImagePicker disabled={pending} onChange={setImages} /> : null}
-      <div className="flex flex-wrap gap-2"><button disabled={pending || (decision === "REPORT_BLOCKER" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? images.length ? "Uploading..." : "Saving..." : decision === "REPORT_BLOCKER" ? "Send blocker report" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => { setDecision(null); setNotes(""); setImages([]); }} className="secondary-button px-3 py-2 text-xs">Cancel</button></div>
+      {decision === "SUBMITTED_FOR_REVIEW" ? <><SubmissionImagePicker disabled={pending} onChange={setImages} /><SubmissionFilePicker disabled={pending} onChange={setAttachments} /></> : null}
+      <div className="flex flex-wrap gap-2"><button disabled={pending || (decision === "REPORT_BLOCKER" && !notes.trim())} type="submit" className="accent-button px-3 py-2 text-xs disabled:opacity-50">{pending ? images.length || attachments.length ? "Uploading..." : "Saving..." : decision === "REPORT_BLOCKER" ? "Send blocker report" : "Confirm submission"}</button><button disabled={pending} type="button" onClick={() => { setDecision(null); setNotes(""); setImages([]); setAttachments([]); }} className="secondary-button px-3 py-2 text-xs">Cancel</button></div>
     </form> : null}
     {!decision ? available.map(([status, label], index) => <button key={status} type="button" disabled={pending} onClick={() => { if (status === "REPORT_BLOCKER" || status === "SUBMITTED_FOR_REVIEW") setDecision(status); else onUpdate(task, status); }} className={`${index === 0 ? "accent-button" : "secondary-button"} px-3 py-2 text-xs disabled:opacity-50`}>{pending ? "Saving..." : label}</button>) : null}
     {task.status === "SUBMITTED_FOR_REVIEW" ? <p className="text-xs text-[var(--muted)]">Awaiting manager review</p> : null}
