@@ -18,7 +18,7 @@ export async function GET() {
     : [];
   const tasks = await prisma.task.findMany({
     where: {
-      projectId: COMPANY_TASK_PROJECT_ID,
+      projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null,
       status: "SUBMITTED_FOR_REVIEW",
       ...(user.role === UserRole.MANAGER
         ? { assignee: { is: { teamMemberships: { some: { teamId: { in: managedTeams.map((team) => team.teamId) } } } } } }
@@ -29,7 +29,7 @@ export async function GET() {
       id: true, title: true, description: true, dueDate: true, recurrenceDate: true,
       assignee: { select: USER_IDENTITY_SELECT },
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: {
-        id: true, notes: true, createdAt: true, submittedBy: { select: USER_IDENTITY_SELECT },
+        id: true, notes: true, createdAt: true, detailsSnapshot: true, submittedBy: { select: USER_IDENTITY_SELECT },
         attachments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionAttachmentSelect },
         images: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionImageSelect },
       } },
@@ -40,7 +40,7 @@ export async function GET() {
     dueDate: task.dueDate?.toISOString() ?? null,
     recurrenceDate: task.recurrenceDate?.toISOString() ?? null,
     submission: task.submissions[0] ? {
-      id: task.submissions[0].id, notes: task.submissions[0].notes, createdAt: task.submissions[0].createdAt.toISOString(),
+      id: task.submissions[0].id, notes: task.submissions[0].notes, createdAt: task.submissions[0].createdAt.toISOString(), detailsSnapshot: task.submissions[0].detailsSnapshot,
       submitter: task.submissions[0].submittedBy.name || task.submissions[0].submittedBy.email,
       submitterAvatarUrl: userAvatarUrl(task.submissions[0].submittedBy.id, task.submissions[0].submittedBy.avatar),
       attachments: (task.submissions[0].attachments ?? []).map(file => ({ ...file, url: submissionAttachmentUrl(task.id, task.submissions[0].id, file.id) })),

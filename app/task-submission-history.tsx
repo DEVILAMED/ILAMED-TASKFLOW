@@ -5,8 +5,9 @@ import SubmissionAttachmentList from "@/app/submission-attachment-list";
 import type { SubmissionAttachment } from "@/lib/submission-attachments";
 import SubmissionImageGallery from "@/app/submission-image-gallery";
 import type { SubmissionImage } from "@/lib/submission-images";
+import type { TaskEvidenceSnapshot } from "@/lib/task-evidence";
 
-type Submission = { id: string; notes: string | null; createdAt: string; submitter: string; attachments?: SubmissionAttachment[]; images: SubmissionImage[] };
+type Submission = { id: string; notes: string | null; createdAt: string; submitter: string; attachments?: SubmissionAttachment[]; images: SubmissionImage[]; detailsSnapshot?: TaskEvidenceSnapshot | null };
 
 export default function TaskSubmissionHistory({ taskId, updatedAt }: { taskId: string; updatedAt: string }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -43,6 +44,7 @@ export default function TaskSubmissionHistory({ taskId, updatedAt }: { taskId: s
       <p className="text-xs font-medium">{submission.submitter}</p>
       <time dateTime={submission.createdAt} className="mt-1 block text-xs text-[var(--muted)]">{new Date(submission.createdAt).toLocaleString()}</time>
       {submission.notes ? <p className="mt-2 whitespace-pre-wrap text-sm">{submission.notes}</p> : null}
+      {submission.detailsSnapshot ? <details className="mt-3 text-sm"><summary className="cursor-pointer font-medium">Instructions saved with this submission</summary><div className="mt-2 space-y-2 rounded-lg border border-[var(--stroke)] p-3"><h4 className="font-medium">{submission.detailsSnapshot.title}</h4><p className="whitespace-pre-wrap">{submission.detailsSnapshot.description || "No description."}</p><p className="text-xs text-[var(--muted)]">{submission.detailsSnapshot.priority} priority · {submission.detailsSnapshot.startDate?.slice(0, 10) || "No start date"} → {submission.detailsSnapshot.dueDate?.slice(0, 10) || "No deadline"}</p><ul>{submission.detailsSnapshot.checklist.map((item, index) => <li key={index}>{item.isCompleted ? "✓" : "○"} {item.title}</li>)}</ul></div></details> : <p className="mt-2 text-xs text-[var(--muted)]">Original instructions were not captured for this older submission.</p>}
       <SubmissionImageGallery images={submission.images} />
       <SubmissionAttachmentList attachments={submission.attachments} />
       {!submission.notes && !submission.images.length && !submission.attachments?.length ? <p className="mt-2 text-xs text-[var(--muted)]">Submitted without notes or attachments.</p> : null}

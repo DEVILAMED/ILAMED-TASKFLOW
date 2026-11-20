@@ -63,10 +63,10 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
         <div className="workspace-dialog-actions field-wide"><button type="button" className="workspace-cancel" disabled={pending} onClick={() => setEditingTask(null)}>Cancel</button><button type="submit" className="accent-button" disabled={pending} aria-busy={pending}>{pending ? "Saving..." : "Save changes"}</button></div>
       </form> : null}
       {confirmDelete && onDelete ? <div className="space-y-3" role="group" aria-label="Confirm task deletion">
-        <h3 className="text-sm font-semibold">Delete &ldquo;{task.title}&rdquo;?</h3>
-        <p className="text-sm text-[var(--muted)]">This permanently removes the task, checklist, comments, submissions, and reviews. This cannot be undone.</p>
-        {task.recurrenceId ? <p className="text-sm text-[var(--muted)]">This deletes only this day&apos;s task. Choose Stop daily repeat first to prevent future tasks.</p> : null}
-        <div className="flex flex-wrap gap-3"><button type="button" disabled={pending} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-50" aria-busy={pending} onClick={() => void onDelete()}>{pending ? "Deleting..." : "Delete permanently"}</button><button type="button" disabled={pending} className="secondary-button rounded-lg px-3 py-2 text-sm" onClick={() => setConfirmDelete(false)}>Keep task</button></div>
+        <h3 className="text-sm font-semibold">Move &ldquo;{task.title}&rdquo; to the recycle bin?</h3>
+        <p className="text-sm text-[var(--muted)]">The task leaves active lists. Its checklist, updates, submissions, reviews, and uploaded files are retained. An administrator can restore it from the recycle bin.</p>
+        {task.recurrenceId ? <p className="text-sm text-[var(--muted)]">This moves only this day&apos;s task. Choose Stop daily repeat first to prevent future tasks.</p> : null}
+        <div className="flex flex-wrap gap-3"><button type="button" disabled={pending} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-50" aria-busy={pending} onClick={() => void onDelete()}>{pending ? "Moving…" : "Move to recycle bin"}</button><button type="button" disabled={pending} className="secondary-button rounded-lg px-3 py-2 text-sm" onClick={() => setConfirmDelete(false)}>Keep task</button></div>
       </div> : null}
     </section>
   );

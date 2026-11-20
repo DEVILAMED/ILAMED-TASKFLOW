@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         return [...new Set([profile?.departmentId, ...managed.map((department) => department.id)].filter((id): id is string => Boolean(id)))];
       });
   const [tasks, projects, users, departments] = await Promise.all([
-    prisma.task.findMany({ where: { AND: [taskScope, { title: { contains: query, mode: "insensitive" } }] }, take: 6, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, status: true, assigneeId: true, projectId: true, project: { select: { title: true } } } }),
+    prisma.task.findMany({ where: { deletedAt: null, archivedAt: null, AND: [taskScope, { title: { contains: query, mode: "insensitive" } }] }, take: 6, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { id: true, title: true, status: true, assigneeId: true, projectId: true, project: { select: { title: true } } } }),
     prisma.project.findMany({ where: { AND: [{ id: { not: COMPANY_TASK_PROJECT_ID } }, user.role === UserRole.ADMIN ? {} : accessibleProjectWhere(user.id), { title: { contains: query, mode: "insensitive" } }] }, take: 4, orderBy: { title: "asc" }, select: { id: true, title: true } }),
     user.role === UserRole.ADMIN
       ? prisma.user.findMany({ where: { role: { not: UserRole.ADMIN }, OR: [{ name: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }, { employeeProfile: { is: { employeeCode: { contains: query, mode: "insensitive" } } } }] }, take: 5, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } })

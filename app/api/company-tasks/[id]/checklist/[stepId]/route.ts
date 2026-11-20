@@ -28,16 +28,23 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const { id, stepId } = await params;
   const result = await prisma.$transaction(async (transaction) => {
     const task = await transaction.task.findFirst({
-      where: { id, projectId: COMPANY_TASK_PROJECT_ID, assigneeId: user.id },
-      select: { id: true },
+      where: { id, projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, assigneeId: user.id },
+      select: { id: true, status: true, updatedAt: true },
     });
     if (!task) return null;
+    if (!["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status)) return null;
+    const before = await transaction.companyTaskChecklistItem.findFirst({ where: { id: stepId, taskId: task.id }, select: { title: true, isCompleted: true } });
+    if (!before) return null;
+    // Serialize checklist progress with submissions, archiving and recycling.
+    const claimed = await transaction.task.updateMany({ where: { id: task.id, deletedAt: null, archivedAt: null, status: task.status, updatedAt: task.updatedAt }, data: { updatedAt: new Date() } });
+    if (!claimed.count) return null;
 
     const updated = await transaction.companyTaskChecklistItem.updateMany({
       where: { id: stepId, taskId: task.id },
       data: { isCompleted: payload.isCompleted as boolean },
     });
     if (!updated.count) return null;
+    if (before.isCompleted !== payload.isCompleted) await transaction.taskChange.create({ data: { taskId: task.id, actorId: user.id, action: "CHECKLIST_UPDATED", before, after: { title: before.title, isCompleted: payload.isCompleted as boolean } } });
 
     return transaction.companyTaskChecklistItem.findUnique({
       where: { id: stepId },

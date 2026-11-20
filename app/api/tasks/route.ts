@@ -235,6 +235,7 @@ export async function POST(request: Request) {
   const task = await prisma.$transaction(async (tx) => {
     const createdTask = await tx.task.create({
       data: {
+        createdById: user.id,
         title,
         description: description || null,
         issueType,

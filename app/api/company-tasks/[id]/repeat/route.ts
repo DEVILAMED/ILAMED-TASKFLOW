@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const result = await prisma.$transaction(async tx => {
       const task = await tx.task.findFirst({
-        where: { id, projectId: COMPANY_TASK_PROJECT_ID, ...companyTaskAccessWhere(user) },
+        where: { id, projectId: COMPANY_TASK_PROJECT_ID, ...companyTaskAccessWhere(user), archivedAt: null },
         select: { id: true, title: true, description: true, priority: true, assigneeId: true, recurrenceId: true, checklistItems: { orderBy: { position: "asc" }, select: { title: true } } },
       });
       if (!task) return { status: 404, error: "Task not found or access denied." };

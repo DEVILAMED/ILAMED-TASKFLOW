@@ -25,6 +25,9 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
         id: true, title: true, description: true, status: true, priority: true,
         startDate: true, dueDate: true, createdAt: true, updatedAt: true,
         assignee: { select: USER_IDENTITY_SELECT },
+        createdById: true,
+        createdBy: { select: { id: true, name: true, email: true, role: true } },
+        archivedAt: true,
         assignedBy: { select: { id: true, name: true, email: true } },
         checklistItems: { orderBy: { position: "asc" }, select: { id: true, title: true, isCompleted: true, position: true } },
       },
@@ -45,6 +48,6 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
     initialFeedback={feedback.map(review => ({ id: review.id, taskId: review.submission.taskId, feedback: review.feedback, rating: review.rating, reviewer: review.reviewer.name || review.reviewer.email }))}
     initialTasks={tasks.map(task => ({ ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null,
       startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null,
-      createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(),
+      archivedAt: task.archivedAt?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(),
     }))} />;
 }

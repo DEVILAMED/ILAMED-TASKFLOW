@@ -28,7 +28,7 @@ export default async function ManagerDashboard() {
   const employeeIds = [...new Set([...memberIds, user.id])];
   const [employeeRows, taskRows, leaveByEmployee] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: memberIds }, role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: USER_IDENTITY_SELECT }),
-    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { ...companyTaskRepeatSelect, id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, assignedBy: { select: { id: true, name: true, email: true } }, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: USER_IDENTITY_SELECT } } }),
+    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, assigneeId: { in: employeeIds } }, orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }], select: { ...companyTaskRepeatSelect, id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, assignedBy: { select: { id: true, name: true, email: true } }, checklistItems: { select: { isCompleted: true } }, comments: { where: { content: { startsWith: "Blocker reported:" } }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, content: true } }, assignee: { select: USER_IDENTITY_SELECT } } }),
     getEmployeeLeave(employeeIds),
   ]);
   const employees = employeeRows.map(withAvatarUrl);

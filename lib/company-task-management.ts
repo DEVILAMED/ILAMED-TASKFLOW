@@ -9,8 +9,8 @@ export function validateCompanyTaskDateRange(startDate: Date | null | undefined,
   return null;
 }
 
-export function canEditOwnCompanyTask(userId: string | undefined, task: { assignedById?: string | null; assigneeId?: string | null }) {
-  return !!userId && task.assignedById === userId && task.assigneeId === userId;
+export function canEditOwnCompanyTask(userId: string | undefined, task: { createdById?: string | null; assigneeId?: string | null }) {
+  return !!userId && task.createdById === userId && task.assigneeId === userId;
 }
 
 export function validateCompanyTaskUpdateFields(role: string, fields: string[], ownsTask = false):
@@ -63,10 +63,9 @@ export function parseCompanyTaskDetails(payload: Record<string, unknown>):
 }
 
 type TaskActor = { id: string; role: string; name: string | null; email: string };
-type TaskDeleteStore = Pick<typeof prisma, "task" | "comment" | "taskLabel" | "activity" | "notification">;
+type TaskDeleteStore = Pick<typeof prisma, "task" | "taskChange" | "notification">;
 
-// Run inside a transaction: restrictive relations are removed explicitly, while
-// checklist items, status history, submissions and reviews cascade from Task.
+// Run inside a transaction. Evidence and uploaded files remain recoverable.
 export async function deleteManagedCompanyTask(
   transaction: TaskDeleteStore,
   actor: TaskActor | null,
@@ -76,16 +75,14 @@ export async function deleteManagedCompanyTask(
   if (!actor) return { ok: false, status: 401, error: "Unauthorized." };
   if (actor.role !== "ADMIN") return { ok: false, status: 403, error: "Administrator access is required to delete tasks." };
   const task = await transaction.task.findFirst({
-    where: { id: taskId, projectId },
-    select: { id: true, title: true, assigneeId: true },
+    where: { id: taskId, projectId, deletedAt: null },
+    select: { id: true, title: true, assigneeId: true, updatedAt: true },
   });
   if (!task) return { ok: false, status: 404, error: "Task not found." };
 
-  await transaction.comment.deleteMany({ where: { taskId: task.id } });
-  await transaction.taskLabel.deleteMany({ where: { taskId: task.id } });
-  await transaction.activity.deleteMany({ where: { taskId: task.id } });
-  await transaction.notification.deleteMany({ where: { taskId: task.id } });
-  await transaction.task.delete({ where: { id: task.id, projectId } });
+  const deletedAt = new Date();
+  await transaction.task.update({ where: { id: task.id, projectId, deletedAt: null, updatedAt: task.updatedAt }, data: { deletedAt } });
+  await transaction.taskChange.create({ data: { taskId: task.id, actorId: actor.id, action: "TRASHED", before: { deletedAt: null }, after: { deletedAt: deletedAt.toISOString() } } });
 
   if (task.assigneeId && task.assigneeId !== actor.id) {
     await transaction.notification.create({
@@ -94,7 +91,7 @@ export async function deleteManagedCompanyTask(
         actorId: actor.id,
         projectId,
         type: "TASK_UNASSIGNED",
-        message: `${actor.name || actor.email} deleted "${task.title}"`,
+        message: `${actor.name || actor.email} moved "${task.title}" to the recycle bin`,
         href: "/company-tasks",
       },
     });

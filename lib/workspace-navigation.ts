@@ -49,7 +49,8 @@ export function getWorkspaceNavItems(role: WorkspaceRole, workspace: "personal" 
   return workspace === "personal" ? personalNavigation : navigation[role];
 }
 
-export function getActiveWorkspaceNavHref(role: WorkspaceRole, pathname: string, search: string, hash: string): string | undefined {
+export function getActiveWorkspaceNavHref(role: WorkspaceRole, pathname: string, search: string, _hash: string): string | undefined {
+  if (role === "ADMIN" && pathname === "/admin/task-library") return "/admin";
   if (pathname.startsWith("/company-tasks/")) return role === "ADMIN" ? "/admin" : "/company-tasks";
   if (pathname === "/todos") {
     const section = new URLSearchParams(search).get("section");

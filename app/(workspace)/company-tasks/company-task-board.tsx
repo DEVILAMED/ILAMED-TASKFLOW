@@ -16,6 +16,8 @@ import TaskSubmissionHistory from "@/app/task-submission-history";
 import UserAvatar from "@/app/user-avatar";
 import CompanyTaskRepeatControl from "@/app/company-task-repeat-control";
 import type { CompanyTaskRepeatInfo } from "@/lib/company-task-repeat";
+import TaskLifecycleButton from "@/app/task-lifecycle-button";
+import TaskChangeHistory from "@/app/task-change-history";
 import { groupCompanyTaskSeries } from "@/lib/company-task-series";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
@@ -37,6 +39,9 @@ type CompanyTask = CompanyTaskRepeatInfo & {
   updatedAt: string;
   assignee: Employee | null;
   assignedBy: { id: string; name: string | null; email: string } | null;
+  createdById?: string | null;
+  createdBy?: { id: string; name: string | null; email: string } | null;
+  archivedAt?: string | null;
   checklistItems: ChecklistItem[];
 };
 
@@ -122,7 +127,7 @@ export default function CompanyTaskBoard({
   const expandedTaskId = detailTaskId;
   const requestedReturn = params.get("returnTo");
   const defaultReturn = isAdmin ? "/admin" : "/company-tasks";
-  const backHref = requestedReturn && /^\/(admin|company-tasks|manager)(\?|$)/.test(requestedReturn) && !requestedReturn.includes("\\") ? requestedReturn : defaultReturn;
+  const backHref = requestedReturn && /^\/(admin(?:\/task-library)?|company-tasks|manager)(\?|$)/.test(requestedReturn) && !requestedReturn.includes("\\") ? requestedReturn : defaultReturn;
   function setExpandedTaskId(value: string | null) {
     if (!value) { router.push(backHref); return; }
     const url = new URL(window.location.href);
@@ -477,7 +482,7 @@ export default function CompanyTaskBoard({
                                   <input
                                     type="checkbox"
                                     checked={item.isCompleted}
-                                    disabled={isAdmin || pendingId === task.id}
+                                    disabled={isAdmin || !["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) || pendingId === task.id}
                                     onChange={(event) => void updateChecklistItem(task, item, event.target.checked)}
                                     aria-label={`${item.isCompleted ? "Mark incomplete" : "Mark complete"}: ${item.title}`}
                                     className="mt-0.5 accent-indigo-400 disabled:cursor-not-allowed"
@@ -610,19 +615,22 @@ export default function CompanyTaskBoard({
             </label>
             <datalist id="task-work-dates">{activeSeriesTasks.map(item => <option key={item.id} value={taskDateKey(item.recurrenceDate ?? item.dueDate) ?? ""} label={statusLabels[item.status]} />)}</datalist>
           </section> : null}
-          {isAdmin || canEditOwnCompanyTask(employeeId, { assignedById: task.assignedBy?.id, assigneeId: task.assignee?.id }) ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} allowAssignment={isAdmin} onDelete={isAdmin ? () => deleteTask(task) : undefined} /> : null}
-          {isAdmin ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}
+          {!task.archivedAt && (isAdmin || canEditOwnCompanyTask(employeeId, { createdById: task.createdById, assigneeId: task.assignee?.id })) ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} allowAssignment={isAdmin} onDelete={isAdmin ? () => deleteTask(task) : undefined} /> : null}
+          {isAdmin && !task.archivedAt ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}
           <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatCompanyTaskSchedule(task.schedule)}</p>
           {task.schedule.dueDate !== taskDateKey(task.dueDate) ? <p className="text-xs text-[var(--muted)]">Original deadline {taskDateKey(task.dueDate)}. The displayed schedule accounts for Sundays and recorded leave.</p> : null}
           <TaskChecklistProgress title={task.title} items={task.checklistItems} />
           <p className="text-xs text-[var(--muted)]">Checklist completion records steps finished; approval is a separate manager decision.</p>
           {task.assignee ? <p className="user-identity text-sm"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} />{employeeLabel(task.assignee)}</p> : null}
           <TaskAssigner task={task} />
-          {(isAdmin || task.assignee?.id !== employeeId) && task.status === "SUBMITTED_FOR_REVIEW" ? <Link href={`/reviews?task=${encodeURIComponent(task.id)}`} className="accent-button inline-flex px-4 py-2 text-sm">Review submission</Link> : null}
-          {(isAdmin || task.assignee?.id !== employeeId) && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
-          {(isAdmin || task.assignee?.id !== employeeId) && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
-          {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id || task.status === "SUBMITTED_FOR_REVIEW"} title={task.status === "SUBMITTED_FOR_REVIEW" ? "Review the pending submission or cancel the task before changing its assignee." : undefined} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
-          {!isAdmin && task.assignee?.id === employeeId ? <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
+          <p className="text-xs text-[var(--muted)]">Created by: {task.createdBy?.name || task.createdBy?.email || "Not recorded"}</p>
+          {task.archivedAt ? <p className="text-sm text-[var(--muted)]">Archived ? preserved for reference.</p> : null}
+          {isAdmin && (task.archivedAt || ["APPROVED", "DONE", "CANCELLED", "REJECTED"].includes(task.status)) ? <TaskLifecycleButton taskId={task.id} action={task.archivedAt ? "UNARCHIVE" : "ARCHIVE"} returnHref={backHref} /> : null}
+          {!task.archivedAt && (isAdmin || task.assignee?.id !== employeeId) && task.status === "SUBMITTED_FOR_REVIEW" ? <Link href={`/reviews?task=${encodeURIComponent(task.id)}`} className="accent-button inline-flex px-4 py-2 text-sm">Review submission</Link> : null}
+          {!task.archivedAt && (isAdmin || task.assignee?.id !== employeeId) && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
+          {!task.archivedAt && (isAdmin || task.assignee?.id !== employeeId) && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
+          {isAdmin && !task.archivedAt ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id || task.status === "SUBMITTED_FOR_REVIEW"} title={task.status === "SUBMITTED_FOR_REVIEW" ? "Review the pending submission or cancel the task before changing its assignee." : undefined} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
+          {!task.archivedAt && !isAdmin && task.assignee?.id === employeeId ? <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
           <div className="border-t border-[var(--stroke)] pt-4 text-xs text-[var(--muted)]"><p>Created {new Date(task.createdAt).toLocaleDateString()}</p><p className="mt-2">Updated {new Date(task.updatedAt).toLocaleDateString()}</p></div>
           </aside>
           <div className="order-first min-w-0 space-y-6 xl:order-none xl:col-start-1 xl:row-start-1">
@@ -630,7 +638,7 @@ export default function CompanyTaskBoard({
           {error ? <p role="alert" className="text-sm text-rose-500">{error}</p> : null}
           {initialFeedback.filter((review) => review.taskId === task.id).length ? <section><h3 className="mb-2 text-sm font-semibold">Review feedback</h3>{initialFeedback.filter((review) => review.taskId === task.id).map((review) => <article key={review.id} className="mb-2 rounded-xl border border-[var(--stroke)] p-3"><p className="whitespace-pre-wrap text-sm">{review.feedback}</p><p className="mt-2 text-xs text-[var(--muted)]">{review.reviewer}{review.rating ? ` / ${review.rating}/5` : ""}</p></article>)}</section> : null}
           <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><h2 className="mb-3 text-base font-semibold">Overview</h2><p className="whitespace-pre-wrap break-words text-sm leading-7 text-[var(--muted)]">{task.description || "No additional instructions."}</p></section>
-          {task.checklistItems.length ? <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><h2 className="mb-3 text-base font-semibold">Checklist</h2>{task.checklistItems.map((item) => <label key={item.id} className="flex items-start gap-3 border-b border-[var(--stroke)] py-3 text-sm last:border-0"><input type="checkbox" checked={item.isCompleted} disabled={isAdmin || task.assignee?.id !== employeeId || pendingId === task.id} onChange={(event) => void updateChecklistItem(task, item, event.target.checked)} /><span className={item.isCompleted ? "line-through opacity-60" : ""}>{item.title}</span></label>)}</section> : null}
+          {task.checklistItems.length ? <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><h2 className="mb-3 text-base font-semibold">Checklist</h2>{task.checklistItems.map((item) => <label key={item.id} className="flex items-start gap-3 border-b border-[var(--stroke)] py-3 text-sm last:border-0"><input type="checkbox" checked={item.isCompleted} disabled={!!task.archivedAt || !["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) || isAdmin || task.assignee?.id !== employeeId || pendingId === task.id} onChange={(event) => void updateChecklistItem(task, item, event.target.checked)} /><span className={item.isCompleted ? "line-through opacity-60" : ""}>{item.title}</span></label>)}</section> : null}
           <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><TaskSubmissionHistory taskId={task.id} updatedAt={task.updatedAt} /></div>
                           <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6">
                             <h3 className="text-sm font-semibold text-[var(--foreground)]">Progress updates</h3>
@@ -650,7 +658,7 @@ export default function CompanyTaskBoard({
                             ) : !commentsLoading && comments[task.id] ? (
                               <p className="mt-2 text-xs text-[var(--muted)]">No updates yet.</p>
                             ) : null}
-                            <form onSubmit={(event) => void addComment(event, task.id)} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            {!task.archivedAt ? <form onSubmit={(event) => void addComment(event, task.id)} className="mt-3 flex flex-col gap-2 sm:flex-row">
                               <textarea
                                 required
                                 maxLength={2000}
@@ -664,9 +672,10 @@ export default function CompanyTaskBoard({
                               <button type="submit" disabled={commentSubmitting || !(commentDrafts[task.id] ?? "").trim()} className="secondary-button h-10 px-4 text-xs font-semibold disabled:opacity-50">
                                 {commentSubmitting ? "Posting..." : "Post update"}
                               </button>
-                            </form>
+                            </form> : null}
                           </section>
 
+          <TaskChangeHistory taskId={task.id} updatedAt={task.updatedAt} />
           </div>
         </div>)}
       </article> : null}

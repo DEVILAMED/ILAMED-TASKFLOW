@@ -30,7 +30,7 @@ export async function listTasksByProject(
 ): Promise<TaskSummary[]> {
   const tasks = await prisma.task.findMany({
     where: {
-      projectId,
+      projectId, deletedAt: null, archivedAt: null,
     },
     orderBy: {
       createdAt: "desc",

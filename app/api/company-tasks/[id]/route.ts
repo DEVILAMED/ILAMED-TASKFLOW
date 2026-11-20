@@ -14,6 +14,7 @@ import { InvalidSubmissionAttachmentError, prepareSubmissionAttachment } from "@
 import { readLimitedFormData, UploadTooLargeError } from "@/lib/limited-form-data";
 import { InvalidSubmissionImageError, prepareSubmissionImage } from "@/lib/prepare-submission-image";
 import { companyTaskRepeatSelect, serializeTaskRepeat } from "@/lib/company-task-repeat";
+import { taskEvidenceSnapshot } from "@/lib/task-evidence";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -31,7 +32,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ ok: false, error: "Only the assigned employee can submit completion files." }, { status: 403 });
     }
     const task = await prisma.task.findFirst({
-      where: { id, projectId: COMPANY_TASK_PROJECT_ID, assigneeId: user.id },
+      where: { id, projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, assigneeId: user.id },
       select: { status: true },
     });
     if (!task) return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
@@ -131,9 +132,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         projectId: COMPANY_TASK_PROJECT_ID,
         ...companyTaskAccessWhere(user),
       },
-      select: { id: true, title: true, assigneeId: true, assignedById: true, status: true, startDate: true, dueDate: true, updatedAt: true },
+      select: { id: true, title: true, description: true, priority: true, createdById: true, archivedAt: true, assigneeId: true, assignee: { select: { name: true, email: true } }, assignedById: true, status: true, startDate: true, dueDate: true, updatedAt: true, checklistItems: { orderBy: { position: "asc" }, select: { title: true, isCompleted: true } } },
     });
     if (!existing) return null;
+    if (existing.archivedAt) return { fieldAccessError: { status: 409, error: "Unarchive this task before making changes." } };
 
     const fieldAccess = validateCompanyTaskUpdateFields(user.role, submittedKeys, canEditOwnCompanyTask(user.id, existing));
     if (!fieldAccess.ok) return { fieldAccessError: fieldAccess };
@@ -167,6 +169,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         projectId: COMPANY_TASK_PROJECT_ID,
         assigneeId: existing.assigneeId,
         assignedById: existing.assignedById,
+        archivedAt: null,
         status: existing.status,
         updatedAt: existing.updatedAt,
       },
@@ -191,6 +194,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         updatedAt: true,
         assigneeId: true,
         assignee: { select: USER_IDENTITY_SELECT },
+        createdById: true,
+        createdBy: { select: { id: true, name: true, email: true, role: true } },
+        archivedAt: true,
         assignedBy: { select: { id: true, name: true, email: true } },
         checklistItems: {
           orderBy: { position: "asc" },
@@ -198,6 +204,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         },
       },
     });
+
+    const before = taskEvidenceSnapshot(existing);
+    const after = taskEvidenceSnapshot({ ...updated, assigneeId: updated.assigneeId });
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      await tx.taskChange.create({ data: { taskId: existing.id, actorId: user.id, action: "DETAILS_EDITED", before, after } });
+    }
 
     const rangeChanged = (details.data.startDate !== undefined && (details.data.startDate?.getTime() ?? null) !== (existing.startDate?.getTime() ?? null))
       || (details.data.dueDate !== undefined && (details.data.dueDate?.getTime() ?? null) !== (existing.dueDate?.getTime() ?? null));
@@ -230,6 +242,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         await tx.taskSubmission.create({
           data: {
             taskId: existing.id, submittedById: user.id, notes: notes || null,
+            detailsSnapshot: after,
             ...(images.length ? { images: { create: images } } : {}),
             ...(attachments.length ? { attachments: { create: attachments } } : {}),
           },

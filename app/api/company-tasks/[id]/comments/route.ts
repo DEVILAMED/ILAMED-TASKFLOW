@@ -4,21 +4,23 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 import { USER_IDENTITY_SELECT, userAvatarUrl } from "@/lib/user-avatar";
+import { companyTaskAccessWhere } from "@/lib/company-task-access";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-async function findAccessibleTask(taskId: string, userId: string, isAdmin: boolean) {
+async function findAccessibleTask(taskId: string, user: { id: string; role: string }) {
   return prisma.task.findFirst({
     where: {
       id: taskId,
       projectId: COMPANY_TASK_PROJECT_ID,
-      ...(isAdmin ? {} : { assigneeId: userId }),
+      ...companyTaskAccessWhere(user),
     },
     select: {
       id: true,
       title: true,
       projectId: true,
       assigneeId: true,
+      archivedAt: true,
     },
   });
 }
@@ -30,7 +32,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
   }
 
   const { id } = await params;
-  const task = await findAccessibleTask(id, user.id, user.role === UserRole.ADMIN);
+  const task = await findAccessibleTask(id, user);
   if (!task) {
     return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
   }
@@ -66,10 +68,12 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const { id } = await params;
-  const task = await findAccessibleTask(id, user.id, user.role === UserRole.ADMIN);
+  const task = await findAccessibleTask(id, user);
   if (!task) {
     return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
   }
+
+  if (task.archivedAt) return NextResponse.json({ ok: false, error: "Unarchive this task before adding updates." }, { status: 409 });
 
   let payload: { content?: unknown } | null;
   try {
@@ -90,6 +94,8 @@ export async function POST(request: Request, { params }: RouteContext) {
         select: { id: true },
       }).then((admins) => admins.map((admin) => admin.id));
   const comment = await prisma.$transaction(async (tx) => {
+    const active = await tx.task.updateMany({ where: { id: task.id, projectId: COMPANY_TASK_PROJECT_ID, ...companyTaskAccessWhere(user), assigneeId: task.assigneeId, archivedAt: null }, data: { updatedAt: new Date() } });
+    if (!active.count) return null;
     const created = await tx.comment.create({
       data: { taskId: task.id, userId: user.id, content },
       select: {
@@ -117,6 +123,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     return created;
   });
 
+  if (!comment) return NextResponse.json({ ok: false, error: "This task changed or is no longer available for updates." }, { status: 409 });
   return NextResponse.json({
     ok: true,
     comment: {

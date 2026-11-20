@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
-export const COMPANY_TASK_PROJECT_ID = "company-task-tracker";
+import { COMPANY_TASK_PROJECT_ID } from "@/lib/company-task-constants";
+export { COMPANY_TASK_PROJECT_ID };
 
 export async function ensureCompanyTaskProject(ownerId: string) {
   return prisma.project.upsert({

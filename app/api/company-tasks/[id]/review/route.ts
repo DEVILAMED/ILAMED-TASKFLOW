@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const { id } = await params;
   const task = await prisma.task.findFirst({
-    where: { id, projectId: COMPANY_TASK_PROJECT_ID, status: TaskStatus.SUBMITTED_FOR_REVIEW },
+    where: { id, projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, status: TaskStatus.SUBMITTED_FOR_REVIEW },
     select: {
       id: true, title: true, status: true, assigneeId: true, updatedAt: true,
       submissions: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, submittedById: true } },
@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const nextStatus = decision as TaskStatus;
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.task.updateMany({
-      where: { id: task.id, status: TaskStatus.SUBMITTED_FOR_REVIEW, updatedAt: task.updatedAt },
+      where: { id: task.id, deletedAt: null, archivedAt: null, status: TaskStatus.SUBMITTED_FOR_REVIEW, updatedAt: task.updatedAt },
       data: { status: nextStatus },
     });
     if (!updated.count) return false;

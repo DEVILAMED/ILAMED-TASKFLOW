@@ -26,7 +26,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
       },
     }),
     prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID }, select: { ...companyTaskRepeatSelect, id: true, dueDate: true, assigneeId: true, status: true } }),
+    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null }, select: { ...companyTaskRepeatSelect, id: true, dueDate: true, assigneeId: true, status: true } }),
   ]);
   const selectedDepartment = resolveDepartmentFilter((await searchParams).department, departments);
   const allUsers = userRows.map(withAvatarUrl);

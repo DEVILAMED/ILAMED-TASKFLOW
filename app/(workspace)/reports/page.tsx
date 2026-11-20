@@ -10,6 +10,7 @@ import { companyTaskSchedule, employeeDayKey, employeeLeaveDays, isCompanyTaskOv
 import { getLeaveForTasks } from "@/services/employee-leave";
 import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
 import type { ReportTask } from "@/lib/performance-report";
+import { describeTaskEvidence, readTaskEvidenceSnapshot } from "@/lib/task-evidence";
 
 const STATUS_ROWS = [
   { key: "TODO", label: "Not started", color: "bg-slate-400" },
@@ -60,7 +61,7 @@ export default async function ReportsPage() {
   const reportAssigneeIds = [...new Set([user.id, ...managerMembers.map((membership) => membership.userId)])];
   const taskRows = await prisma.task.findMany({
     where: {
-      projectId: COMPANY_TASK_PROJECT_ID,
+      projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null,
       ...(user.role === "ADMIN" ? {} : { assigneeId: { in: user.role === "MANAGER" ? reportAssigneeIds : [user.id] } }),
     },
     select: {
@@ -75,6 +76,8 @@ export default async function ReportsPage() {
       startDate: true,
       dueDate: true,
       assignedBy: { select: { id: true, name: true, email: true, role: true } },
+      createdBy: { select: { id: true, name: true, email: true, role: true } },
+      changes: { orderBy: { createdAt: "asc" }, select: { action: true, before: true, after: true, createdAt: true, actor: { select: { name: true, email: true } } } },
       assignee: { select: { id: true, name: true, email: true, employeeProfile: { select: { employeeCode: true, designation: true, department: { select: { id: true, name: true } } } } } },
       checklistItems: { orderBy: { position: "asc" }, select: { title: true, isCompleted: true } },
       statusHistory: { orderBy: { createdAt: "asc" }, select: { fromStatus: true, toStatus: true, createdAt: true, actor: { select: { name: true, email: true } } } },
@@ -82,7 +85,7 @@ export default async function ReportsPage() {
       submissions: {
         orderBy: { createdAt: "asc" },
         select: {
-          submittedById: true, notes: true, createdAt: true, submittedBy: { select: { name: true, email: true } },
+          submittedById: true, notes: true, createdAt: true, detailsSnapshot: true, submittedBy: { select: { name: true, email: true } },
           images: { select: { fileName: true } }, attachments: { select: { fileName: true } },
           reviews: { orderBy: { createdAt: "asc" }, select: { id: true, decision: true, rating: true, feedback: true, createdAt: true, reviewer: { select: { name: true, email: true } } } },
         },
@@ -160,13 +163,15 @@ export default async function ReportsPage() {
       deadline: schedule.dueDate ? formatDueDate(schedule.dueDate) : "No deadline", workingDays: schedule.workingDays,
       createdAt: task.createdAt.toISOString(), recurrenceDate: task.recurrenceDate?.toISOString().slice(0, 10) ?? null,
       overdue: isCompanyTaskOverdue(task, today, leaveByEmployee),
-      source: task.assignedBy?.id === task.assigneeId ? "Self-created" : task.assignedBy?.role === "ADMIN" ? "Admin-assigned" : task.assignedBy?.role === "MANAGER" ? "Manager-assigned" : task.assignedBy ? "Assigned by another employee" : "Not recorded",
+      source: task.createdBy?.id === task.assigneeId ? "Self-created" : task.createdBy?.role === "ADMIN" ? "Admin-created" : task.createdBy?.role === "MANAGER" ? "Manager-created" : task.createdBy ? `Created by ${employeeName(task.createdBy)}` : "Original creator not recorded",
       assignedBy: task.assignedBy ? employeeName(task.assignedBy) : "Not recorded",
       checklist: task.checklistItems,
+      changes: task.changes.map(change => ({ action: change.action, before: describeTaskEvidence(change.before), after: describeTaskEvidence(change.after), createdAt: change.createdAt.toISOString(), actor: employeeName(change.actor) })),
       history: task.statusHistory.map(item => ({ fromStatus: item.fromStatus, toStatus: item.toStatus, createdAt: item.createdAt.toISOString(), actor: employeeName(item.actor) })),
       comments: task.comments.map(item => ({ content: item.content, createdAt: item.createdAt.toISOString(), author: employeeName(item.user) })),
       submissions: task.submissions.map(item => ({
         submittedById: item.submittedById, submittedBy: employeeName(item.submittedBy), createdAt: item.createdAt.toISOString(), notes: item.notes,
+        detailsSnapshot: readTaskEvidenceSnapshot(item.detailsSnapshot),
         files: [...item.images, ...item.attachments].map(file => file.fileName),
         reviews: item.reviews.map(review => ({ id: review.id, decision: review.decision, rating: review.rating, feedback: review.feedback, createdAt: review.createdAt.toISOString(), reviewer: employeeName(review.reviewer) })),
       })),

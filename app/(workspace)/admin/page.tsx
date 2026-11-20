@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const [employees, tasks] = await Promise.all([
     prisma.user.findMany({ where: { role: { not: "ADMIN" }, isBlocked: false, OR: [{ employeeProfile: null }, { employeeProfile: { employmentStatus: { not: "INACTIVE" } } }], AND: [departmentEmployeeWhere(selectedDepartment)] }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } }),
     prisma.task.findMany({
-      where: { projectId: COMPANY_TASK_PROJECT_ID, ...departmentTaskWhere(selectedDepartment) },
+      where: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, ...departmentTaskWhere(selectedDepartment) },
       select: {
         ...companyTaskRepeatSelect,
         id: true,
@@ -37,6 +38,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         createdAt: true,
         updatedAt: true,
         assignee: { select: { ...USER_IDENTITY_SELECT, employeeProfile: { select: { departmentId: true } } } },
+        createdById: true,
+        createdBy: { select: { id: true, name: true, email: true, role: true } },
+        archivedAt: true,
         assignedBy: { select: { id: true, name: true, email: true } },
         checklistItems: {
           orderBy: { position: "asc" },
@@ -48,8 +52,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   ]);
   const leaveByEmployee = await getEmployeeLeave([...employees.map(employee => employee.id), ...tasks.flatMap(task => task.assignee ? [task.assignee.id] : [])]);
   return <>
-    <WorkspacePageHeading kicker={calendar ? "SCHEDULE" : "WORKFLOW"} title={calendar ? "Calendar" : "Tasks"} action={<NewTaskButton />} />
+    <WorkspacePageHeading kicker={calendar ? "SCHEDULE" : "WORKFLOW"} title={calendar ? "Calendar" : "Tasks"} action={<div className="flex flex-wrap items-center gap-3"><Link href="/admin/task-library" className="secondary-button px-3 py-2 text-sm">Archive & recycle bin</Link><NewTaskButton /></div>} />
     <AdminDepartmentSwitcher departments={departments} selectedDepartment={selectedDepartment} />
-    <CompanyTaskBoard isAdmin employees={employees} leaveByEmployee={leaveByEmployee} initialTasks={tasks.map((task) => ({ ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
+    <CompanyTaskBoard isAdmin employees={employees} leaveByEmployee={leaveByEmployee} initialTasks={tasks.map((task) => ({ ...serializeTaskRepeat(task), assignee: task.assignee ? withAvatarUrl(task.assignee) : null, startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null, archivedAt: task.archivedAt?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() }))} />
   </>;
 }

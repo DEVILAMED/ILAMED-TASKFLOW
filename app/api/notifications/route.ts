@@ -17,6 +17,7 @@ function notificationAccessWhere(user: { id: string; role: string }): Prisma.Not
   return {
     userId: user.id,
     OR: [
+      { type: NotificationType.COMPANY_TASK_DIGEST, projectId: null, taskId: null },
       {
         projectId: { not: COMPANY_TASK_PROJECT_ID },
         project: { is: accessibleProjectWhere(user.id) },

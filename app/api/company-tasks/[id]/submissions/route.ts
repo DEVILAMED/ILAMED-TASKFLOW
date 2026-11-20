@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     select: { submissions: {
       orderBy: { createdAt: "desc" }, take: 20,
       select: {
-        id: true, notes: true, createdAt: true,
+        id: true, notes: true, createdAt: true, detailsSnapshot: true,
         submittedBy: { select: { name: true, email: true } },
         attachments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionAttachmentSelect },
         images: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: submissionImageSelect },
@@ -24,7 +24,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!task) return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
   return NextResponse.json({ ok: true, submissions: task.submissions.map((submission) => ({
-    id: submission.id, notes: submission.notes, createdAt: submission.createdAt.toISOString(),
+    id: submission.id, notes: submission.notes, createdAt: submission.createdAt.toISOString(), detailsSnapshot: submission.detailsSnapshot,
     submitter: submission.submittedBy.name || submission.submittedBy.email,
     attachments: (submission.attachments ?? []).map(file => ({ ...file, url: submissionAttachmentUrl(id, submission.id, file.id) })),
     images: submission.images.map((image) => ({ ...image, url: submissionImageUrl(id, submission.id, image.id) })),

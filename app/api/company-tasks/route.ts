@@ -21,6 +21,9 @@ const taskSelect = {
   createdAt: true,
   updatedAt: true,
   assignee: { select: USER_IDENTITY_SELECT },
+  createdById: true,
+  createdBy: { select: { id: true, name: true, email: true, role: true } },
+  archivedAt: true,
   assignedBy: { select: { id: true, name: true, email: true } },
   checklistItems: {
     orderBy: { position: "asc" },
@@ -42,7 +45,7 @@ export async function GET() {
   const teamMemberIds = managerTeams.length ? (await prisma.teamMembership.findMany({ where: { teamId: { in: managerTeams.map((team) => team.teamId) } }, select: { userId: true } })).map((membership) => membership.userId) : [];
   const tasks = await prisma.task.findMany({
     where: {
-      projectId: COMPANY_TASK_PROJECT_ID,
+      projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null,
       ...(user.role === UserRole.ADMIN ? {} : { assigneeId: { in: [...new Set([user.id, ...teamMemberIds])] } }),
     },
     select: taskSelect,
@@ -157,6 +160,7 @@ export async function POST(request: Request) {
         projectId: project.id,
         assigneeId: assignee.id,
         assignedById: user.id,
+        createdById: user.id,
         checklistItems: {
           create: checklistItems.map((item, position) => ({
             title: item.trim(),

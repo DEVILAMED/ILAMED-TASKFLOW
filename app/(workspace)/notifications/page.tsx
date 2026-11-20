@@ -6,7 +6,7 @@ import WorkspacePageHeading from "@/app/workspace-page-heading";
 import UserAvatar from "@/app/user-avatar";
 
 type Notification = { id: string; type: string; message: string; href: string; readAt: string | null; createdAt: string; actor?: { name: string | null; email: string; avatarUrl: string | null } | null };
-const titles: Record<string, string> = { PERSONAL_TASK_REMINDER: "Personal task reminder", TASK_SUBMITTED: "Task submitted for approval", TASK_ASSIGNED: "New task assigned", TASK_APPROVED: "Task approved", TASK_REVISION_REQUESTED: "Revision requested", TASK_REJECTED: "Task reviewed", TASK_COMMENTED: "New task update", MENTIONED: "You were mentioned", DUE_DATE_CHANGED: "Deadline updated", TASK_UNASSIGNED: "Task assignment updated" };
+const titles: Record<string, string> = { COMPANY_TASK_DIGEST: "Daily task digest", PERSONAL_TASK_REMINDER: "Personal task reminder", TASK_SUBMITTED: "Task submitted for approval", TASK_ASSIGNED: "New task assigned", TASK_APPROVED: "Task approved", TASK_REVISION_REQUESTED: "Revision requested", TASK_REJECTED: "Task reviewed", TASK_COMMENTED: "New task update", MENTIONED: "You were mentioned", DUE_DATE_CHANGED: "Deadline updated", TASK_UNASSIGNED: "Task assignment updated" };
 
 export default function NotificationsPage() {
   const refreshVersion = useRef({ value: 0 });

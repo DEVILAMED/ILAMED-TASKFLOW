@@ -33,7 +33,7 @@ export async function ensureDailyCompanyTasks(now = new Date()) {
       if (!claimed.count || !days.length) return;
       const occurrences = days.map(day => ({
         id: randomUUID(), title: rule.title, description: rule.description, priority: rule.priority, status: "TODO" as const,
-        projectId: rule.projectId, assigneeId: rule.assigneeId, assignedById: rule.createdById, recurrenceId: rule.id,
+        projectId: rule.projectId, assigneeId: rule.assigneeId, assignedById: rule.createdById, createdById: rule.createdById, recurrenceId: rule.id,
         recurrenceDate: new Date(`${day}T00:00:00Z`), startDate: new Date(`${day}T00:00:00Z`), dueDate: new Date(`${day}T00:00:00Z`),
       }));
       await tx.task.createMany({ data: occurrences });

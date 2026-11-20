@@ -8,7 +8,7 @@ export async function getReviewEvidence(window: ReviewWindow, employeeIds?: read
     where: {
       createdAt: { gte: window.start, lt: window.end },
       submission: {
-        task: { projectId: COMPANY_TASK_PROJECT_ID },
+        task: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null },
         ...(employeeIds === undefined ? {} : { submittedById: { in: [...employeeIds] } }),
       },
     },

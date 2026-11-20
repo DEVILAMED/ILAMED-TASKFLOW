@@ -149,6 +149,7 @@ export async function POST() {
         const sprintId = task.sprint === "active" ? activeSprint.id : task.sprint === "history" ? historySprint.id : null;
         const createdTask = await tx.task.create({
           data: {
+            createdById: user.id,
             title: task.title,
             description: task.description,
             issueType: task.issueType,

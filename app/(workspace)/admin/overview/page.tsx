@@ -36,7 +36,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       },
     }),
     prisma.task.findMany({
-      where: { projectId: COMPANY_TASK_PROJECT_ID, ...departmentTaskWhere(selectedDepartment) },
+      where: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, ...departmentTaskWhere(selectedDepartment) },
       select: {
         ...companyTaskRepeatSelect,
         id: true,
@@ -58,7 +58,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
     }),
     getReviewEvidence({ start: reviewMonths[0].start, end: period.end }),
-    prisma.taskStatusHistory.findMany({ where: { task: { projectId: COMPANY_TASK_PROJECT_ID, ...departmentTaskWhere(selectedDepartment) } }, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, actor: { select: { name: true, email: true } }, task: { select: { title: true } } } }),
+    prisma.taskStatusHistory.findMany({ where: { task: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, ...departmentTaskWhere(selectedDepartment) } }, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, actor: { select: { name: true, email: true } }, task: { select: { title: true } } } }),
   ]);
   const tasks = companyTaskSnapshot(taskRows);
   const users = userRows.map(withAvatarUrl);

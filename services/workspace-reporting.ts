@@ -12,5 +12,5 @@ export async function companyReportingEmployeeIds(user: AuthUser): Promise<strin
 
 export async function companyReportingScope(user: AuthUser): Promise<Prisma.TaskWhereInput> {
   const employeeIds = await companyReportingEmployeeIds(user);
-  return { projectId: COMPANY_TASK_PROJECT_ID, ...(employeeIds === undefined ? {} : { assigneeId: { in: employeeIds } }) };
+  return { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, ...(employeeIds === undefined ? {} : { assigneeId: { in: employeeIds } }) };
 }

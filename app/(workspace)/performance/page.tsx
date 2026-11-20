@@ -29,7 +29,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   const employeeIds = target ? [target] : memberIds;
   const [tasks, reviews, employee, memberTasks] = await Promise.all([
     prisma.task.findMany({
-      where: { projectId: COMPANY_TASK_PROJECT_ID, ...(employeeIds === undefined ? {} : { assigneeId: { in: employeeIds } }) },
+      where: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, ...(employeeIds === undefined ? {} : { assigneeId: { in: employeeIds } }) },
       select: { ...companyTaskRepeatSelect, id: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true },
     }),
     getReviewEvidence(period, employeeIds),
@@ -42,7 +42,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
       teamMemberships: { select: { role: true, team: { select: { id: true, name: true } } } },
     } }) : null,
     target ? prisma.task.findMany({
-      where: { projectId: COMPANY_TASK_PROJECT_ID, assigneeId: target },
+      where: { projectId: COMPANY_TASK_PROJECT_ID, deletedAt: null, archivedAt: null, assigneeId: target },
       select: {
         ...companyTaskRepeatSelect, id: true, title: true, description: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true, createdAt: true, updatedAt: true,
         assignedBy: { select: { name: true, email: true } },
