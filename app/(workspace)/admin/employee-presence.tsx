@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import UserRoleControl from "./user-role-control";
-import EmployeeAccountEditor from "./employee-account-editor";
 import UserAvatar from "@/app/user-avatar";
-import ProfilePhotoUploader from "@/app/profile-photo-uploader";
-import EmployeeLeaveEditor from "./employee-leave-editor";
-import EmployeeDepartmentControl from "@/app/employee-department-control";
 
 type Employee = {
   id: string;
@@ -21,6 +15,7 @@ type Employee = {
   createdAt: string;
   lastSeenAt: string | null;
   profile: EmployeeProfile | null;
+  taskSummary?: { assigned: number; completed: number; pending: number };
 };
 type EmployeeProfile = { employeeCode: string | null; phone: string | null; designation: string | null; joiningDate: string | null; employmentStatus: "ACTIVE" | "INACTIVE" | "ON_LEAVE"; departmentId: string | null; managerId: string | null };
 type DepartmentOption = { id: string; name: string };
@@ -48,7 +43,6 @@ function formatLastSeen(value: string | null, now: number) {
 }
 
 export default function EmployeePresence({ employees: initialEmployees, currentUserId, departments, managers, today }: { employees: Employee[]; currentUserId: string; departments: DepartmentOption[]; managers: ManagerOption[]; today: string }) {
-  const router = useRouter();
   const [lastSeenById, setLastSeenById] = useState<Record<string, string | null>>(
     () => Object.fromEntries(initialEmployees.map((employee) => [employee.id, employee.lastSeenAt])),
   );
@@ -131,6 +125,7 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
                 {employee.id === currentUserId ? <span className="text-xs font-medium text-[var(--accent)]">You</span> : null}
               </div>
               <p className="mt-1 text-xs text-white/40">{employee.email}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">{employee.profile?.designation || roleLabels[employee.role]} / {departments.find(department => department.id === employee.profile?.departmentId)?.name || "Unassigned department"}{employee.isBlocked ? " / Login blocked" : ""}</p>
               <p className="mt-2 flex items-center gap-2 text-xs">
                 <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-slate-500"}`} />
                 <span className={online ? "font-medium text-emerald-300" : "text-white/45"}>
@@ -140,20 +135,10 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-4">
-              {employee.role !== "ADMIN" ? <EmployeeDepartmentControl employeeId={employee.id} employeeName={employee.name || employee.email} departmentId={employee.profile?.departmentId ?? null} departments={departments} /> : null}
-              {employee.role !== "ADMIN" ? <EmployeeAccountEditor account={employee} onSaved={() => router.refresh()} /> : null}
-              <UserRoleControl
-                userId={employee.id}
-                role={employee.role}
-                isBlocked={employee.isBlocked}
-                displayName={employee.name || employee.email}
-                isCurrentUser={employee.id === currentUserId}
-              />
+              {employee.taskSummary ? <div className="flex gap-4 text-center text-xs text-[var(--muted)]">{[[employee.taskSummary.assigned, "Tasks"], [employee.taskSummary.completed, "Completed"], [employee.taskSummary.pending, "Pending"]].map(([count, label]) => <div key={label}><strong className="block text-base text-[var(--foreground)]">{count}</strong>{label}</div>)}</div> : null}
+              <Link href={`/performance?employee=${encodeURIComponent(employee.id)}`} className="secondary-button px-3 py-2 text-sm">View profile</Link>
             </div>
             </div>
-            {employee.role !== "ADMIN" ? <EmployeeProfileEditor employeeId={employee.id} profile={employee.profile} managers={managers} onSaved={() => router.refresh()} /> : null}
-            {employee.role !== "ADMIN" ? <EmployeeLeaveEditor employeeId={employee.id} leaveDays={employee.leaveDays} today={today} /> : null}
-            {employee.role !== "ADMIN" || employee.id === currentUserId ? <details className="mt-3 rounded-xl border border-[var(--stroke)] p-3"><summary className="cursor-pointer text-xs font-medium text-[var(--muted)]">Profile picture</summary><ProfilePhotoUploader userId={employee.id} name={employee.name || employee.email} avatarUrl={employee.avatarUrl ?? null} /></details> : null}
           </div>
         );
       })}
@@ -161,46 +146,4 @@ export default function EmployeePresence({ employees: initialEmployees, currentU
       {pageCount > 1 ? <div className="mt-3 flex items-center justify-between"><p className="text-xs text-white/40">Page {currentPage} of {pageCount}</p><div className="flex gap-2"><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Previous</button><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="secondary-button px-3 py-2 text-xs disabled:opacity-40">Next</button></div></div> : null}
     </div>
   );
-}
-
-function EmployeeProfileEditor({ employeeId, profile, managers, onSaved }: {
-  employeeId: string; profile: EmployeeProfile | null; managers: ManagerOption[]; onSaved: () => void;
-}) {
-  const [employeeCode, setEmployeeCode] = useState(profile?.employeeCode ?? "");
-  const [phone, setPhone] = useState(profile?.phone ?? "");
-  const [designation, setDesignation] = useState(profile?.designation ?? "");
-  const [joiningDate, setJoiningDate] = useState(profile?.joiningDate ?? "");
-  const [employmentStatus, setEmploymentStatus] = useState<EmployeeProfile["employmentStatus"]>(profile?.employmentStatus ?? "ACTIVE");
-  const [managerId, setManagerId] = useState(profile?.managerId ?? "");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setPending(true); setError(null); setSaved(false);
-    try {
-      const response = await fetch(`/api/admin/users/${employeeId}/profile`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeCode, phone, designation, joiningDate: joiningDate || null, employmentStatus, managerId: managerId || null }),
-      });
-      const data = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || !data.ok) throw new Error(data.error || "Unable to save the employee profile.");
-      setSaved(true); onSaved();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save employee profile."); }
-    finally { setPending(false); }
-  }
-
-  return <details className="basis-full rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-2">
-    <summary className="cursor-pointer text-xs font-medium text-white/60">{profile ? "Employee profile" : "Add employee profile"}</summary>
-    <form onSubmit={(event) => void save(event)} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <label className="grid gap-1 text-[11px] text-white/45">Employee ID<input maxLength={40} value={employeeCode} onChange={(event) => setEmployeeCode(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
-      <label className="grid gap-1 text-[11px] text-white/45">Phone<input maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
-      <label className="grid gap-1 text-[11px] text-white/45">Designation<input maxLength={100} value={designation} onChange={(event) => setDesignation(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
-      <label className="grid gap-1 text-[11px] text-white/45">Joining date<input type="date" value={joiningDate} onChange={(event) => setJoiningDate(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs" /></label>
-      <label className="grid gap-1 text-[11px] text-white/45">Employment status<select value={employmentStatus} onChange={(event) => setEmploymentStatus(event.target.value as EmployeeProfile["employmentStatus"])} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option></select></label>
-      <label className="grid gap-1 text-[11px] text-white/45 sm:col-span-2">Reporting manager<select value={managerId} onChange={(event) => setManagerId(event.target.value)} className="soft-input h-9 rounded-lg px-2 text-xs"><option value="">Unassigned</option>{managers.filter((manager) => manager.id !== employeeId).map((manager) => <option key={manager.id} value={manager.id}>{manager.name || manager.email}</option>)}</select></label>
-      <div className="flex items-end gap-3"><button disabled={pending} className="secondary-button h-9 px-3 text-xs font-semibold disabled:opacity-50">{pending ? "Saving…" : "Save profile"}</button>{saved ? <span role="status" className="pb-2 text-xs feedback-success-text">Saved</span> : null}</div>
-      {error ? <p role="alert" className="text-xs feedback-error-text sm:col-span-2">{error}</p> : null}
-    </form>
-  </details>;
 }

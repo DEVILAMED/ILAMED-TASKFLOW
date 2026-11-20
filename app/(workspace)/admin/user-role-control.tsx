@@ -9,6 +9,7 @@ type UserRoleControlProps = {
   isBlocked?: boolean;
   displayName?: string;
   isCurrentUser: boolean;
+  onDeletedHref?: string;
 };
 
 export default function UserRoleControl({
@@ -17,6 +18,7 @@ export default function UserRoleControl({
   isBlocked = false,
   displayName = userId,
   isCurrentUser,
+  onDeletedHref,
 }: UserRoleControlProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +84,17 @@ export default function UserRoleControl({
         return;
       }
 
-      startTransition(() => router.refresh());
+      startTransition(() => {
+        if (onDeletedHref) router.push(onDeletedHref);
+        router.refresh();
+      });
     } catch {
       setError("Unable to reach the server. Please try again.");
     }
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className="flex flex-col items-start gap-2">
       {isCurrentUser ? (
         <span className="badge-pill text-xs text-[var(--accent)]">You · Admin</span>
       ) : (

@@ -1,4 +1,6 @@
 import { companyTaskSnapshot } from "@/lib/company-task-series";
+import UserProfileManagement from "@/app/user-profile-management";
+import { employeeDayKey } from "@/lib/company-workdays";
 import TeamMemberDetails from "@/app/team-member-details";
 import TeamMemberTasks from "@/app/team-member-tasks";
 import { companyTaskRepeatSelect, serializeTaskRepeat } from "@/lib/company-task-repeat";
@@ -34,7 +36,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     target ? prisma.user.findUnique({ where: { id: target }, select: {
       ...USER_IDENTITY_SELECT, role: true, isBlocked: true, createdAt: true, lastSeenAt: true,
       employeeProfile: { select: {
-        employeeCode: true, phone: true, designation: true, joiningDate: true, employmentStatus: true,
+        employeeCode: true, phone: true, designation: true, joiningDate: true, employmentStatus: true, departmentId: true, managerId: true,
         department: { select: { name: true } }, manager: { select: { name: true, email: true } },
       } },
       teamMemberships: { select: { role: true, team: { select: { id: true, name: true } } } },
@@ -51,6 +53,10 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     }) : [],
   ]);
   if (target && !employee) notFound();
+  const managementOptions = user.role === "ADMIN" && employee ? await Promise.all([
+    prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.user.findMany({ where: { role: { not: "ADMIN" }, isBlocked: false }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true } }),
+  ]) : null;
   const leaveByEmployee = await getEmployeeLeave([
     ...(employeeIds ?? []),
     ...tasks.flatMap(task => task.assigneeId ? [task.assigneeId] : []),
@@ -62,6 +68,12 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     description={employee ? employee.employeeProfile?.designation || "Profile, assigned work, and review quality." : "Manager review quality and current task activity."}
     memberDetails={employee ? <>
       <TeamMemberDetails employee={employee} leaveDays={leaveByEmployee[employee.id] ?? []} backHref={user.role === "ADMIN" ? "/admin/employees" : user.role === "MANAGER" ? "/manager" : "/dashboard"} />
+      {managementOptions ? <UserProfileManagement key={`${employee.id}:${employee.role}`} currentUserId={user.id} today={employeeDayKey()}
+        departments={managementOptions[0]} managers={managementOptions[1]} leaveDays={leaveByEmployee[employee.id] ?? []}
+        account={{ id: employee.id, name: employee.name, email: employee.email, role: employee.role, isBlocked: employee.isBlocked,
+          avatarUrl: userAvatarUrl(employee.id, employee.avatar),
+          profile: employee.employeeProfile ? { ...employee.employeeProfile, joiningDate: employee.employeeProfile.joiningDate?.toISOString().slice(0, 10) ?? null } : null,
+        }} /> : null}
       <TeamMemberTasks key={employee.id} leaveDays={leaveByEmployee[employee.id] ?? []} tasks={memberTasks.map(task => ({
         ...serializeTaskRepeat(task), startDate: task.startDate?.toISOString() ?? null, dueDate: task.dueDate?.toISOString() ?? null,
         createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(),

@@ -3,7 +3,6 @@ import { ReviewDecision, TaskStatus, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
-import { isReviewRating } from "@/lib/review-quality";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -14,21 +13,17 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: "Manager access is required to review work." }, { status: 403 });
   }
 
-  let payload: { decision?: unknown; rating?: unknown; feedback?: unknown; submissionId?: unknown } | null;
+  let payload: { decision?: unknown; feedback?: unknown; submissionId?: unknown } | null;
   try { payload = await request.json(); } catch {
     return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
   }
   const decision = payload?.decision;
   const feedback = typeof payload?.feedback === "string" ? payload.feedback.trim() : "";
-  const rating = payload?.rating;
   if (typeof decision !== "string" || !Object.values(ReviewDecision).includes(decision as ReviewDecision)) {
     return NextResponse.json({ ok: false, error: "Choose approve, request revision, or reject." }, { status: 400 });
   }
   if ((payload?.feedback != null && typeof payload.feedback !== "string") || feedback.length > 2000) {
     return NextResponse.json({ ok: false, error: "Review feedback must be text with at most 2000 characters." }, { status: 400 });
-  }
-  if (!isReviewRating(rating)) {
-    return NextResponse.json({ ok: false, error: "Provide a quality rating from 1 to 5." }, { status: 400 });
   }
   if (typeof payload?.submissionId !== "string" || !payload.submissionId.trim()) {
     return NextResponse.json({ ok: false, error: "Choose a pending submission to review." }, { status: 400 });
@@ -75,7 +70,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     });
     if (!updated.count) return false;
     await tx.taskReview.create({
-      data: { submissionId: submission.id, reviewerId: reviewer.id, decision: decision as ReviewDecision, rating: rating as number, feedback },
+      data: { submissionId: submission.id, reviewerId: reviewer.id, decision: decision as ReviewDecision, rating: null, feedback },
     });
     await tx.taskStatusHistory.create({
       data: { taskId: task.id, actorId: reviewer.id, fromStatus: TaskStatus.SUBMITTED_FOR_REVIEW, toStatus: nextStatus },
