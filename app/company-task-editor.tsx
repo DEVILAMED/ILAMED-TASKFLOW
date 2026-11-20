@@ -7,12 +7,13 @@ type Employee = { id: string; name: string | null; email: string };
 type EditableTask = CompanyTaskRepeatInfo & { id: string; title: string; status: string; description: string | null; startDate: string | null; dueDate: string | null; priority: "LOW" | "MEDIUM" | "HIGH"; assignee: Employee | null };
 export type CompanyTaskChanges = { title?: string; description?: string; startDate?: string | null; dueDate?: string | null; priority?: "LOW" | "MEDIUM" | "HIGH"; assigneeId?: string | null };
 
-export default function CompanyTaskEditor({ task, employees, pending, onSave, onDelete }: {
+export default function CompanyTaskEditor({ task, employees, pending, onSave, onDelete, allowAssignment = true }: {
   task: EditableTask;
   employees: Employee[];
   pending: boolean;
   onSave: (changes: CompanyTaskChanges) => Promise<boolean>;
-  onDelete: () => Promise<boolean>;
+  onDelete?: () => Promise<boolean>;
+  allowAssignment?: boolean;
 }) {
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -33,7 +34,7 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
     if (startDate !== (editingTask.startDate?.slice(0, 10) || "")) changes.startDate = startDate;
     if (endDate !== (editingTask.dueDate?.slice(0, 10) || "")) changes.dueDate = endDate;
     if (priority !== editingTask.priority) changes.priority = priority;
-    if (assigneeId !== (editingTask.assignee?.id || null)) changes.assigneeId = assigneeId;
+    if (allowAssignment && assigneeId !== (editingTask.assignee?.id || null)) changes.assigneeId = assigneeId;
     if (!Object.keys(changes).length || await onSave(changes)) setEditingTask(null);
   }
 
@@ -41,11 +42,11 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
     <section className="rounded-xl border border-[var(--stroke)] p-4" aria-label="Manage task">
       {!editingTask && !confirmDelete ? <div className="flex flex-wrap gap-3">
         <button type="button" disabled={pending} className="secondary-button rounded-lg px-3 py-2 text-sm disabled:opacity-50" onClick={() => { setEditingTask({ ...task }); setStartDate(task.startDate?.slice(0, 10) || ""); setEndDate(task.dueDate?.slice(0, 10) || ""); }}>Edit task</button>
-        <button type="button" disabled={pending} className="rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-600 disabled:opacity-50" onClick={() => setConfirmDelete(true)}>Delete task</button>
+        {onDelete ? <button type="button" disabled={pending} className="rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-600 disabled:opacity-50" onClick={() => setConfirmDelete(true)}>Delete task</button> : null}
       </div> : null}
       {editingTask ? <form onSubmit={(event) => void submit(event)} className="workspace-task-form">
         <h3 className="field-wide text-sm font-semibold">Edit task</h3>
-        {task.recurrenceId ? <p className="field-wide text-xs text-[var(--muted)]">Edits affect this task only. Future daily tasks use the original instructions and assignee. Stop daily repeat and create a new schedule to change future tasks.</p> : null}
+        {task.recurrenceId ? <p className="field-wide text-xs text-[var(--muted)]">Edits affect this task only. Future daily tasks use the original instructions and assignee.</p> : null}
         <label className="workspace-field field-wide">Title<input name="title" required minLength={2} maxLength={200} defaultValue={editingTask.title} disabled={pending} /></label>
         <label className="workspace-field field-wide">Description<textarea name="description" rows={3} maxLength={2000} defaultValue={editingTask.description ?? ""} disabled={pending} /></label>
         <fieldset className="field-wide grid gap-3 sm:grid-cols-2"><legend className="mb-2 text-sm font-medium">Task date range</legend>
@@ -53,15 +54,15 @@ export default function CompanyTaskEditor({ task, employees, pending, onSave, on
           <label className="workspace-field">End date<input name="dueDate" type="date" required value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} disabled={pending} /></label>
         </fieldset>
         <label className="workspace-field">Priority<select name="priority" defaultValue={editingTask.priority} disabled={pending}><option value="LOW">Low</option><option value="MEDIUM">Normal</option><option value="HIGH">High</option></select></label>
-        <label className="workspace-field field-wide">Assigned to<select name="assigneeId" defaultValue={editingTask.assignee?.id ?? ""} disabled={pending || task.status === "SUBMITTED_FOR_REVIEW"}>
+        {allowAssignment ? <label className="workspace-field field-wide">Assigned to<select name="assigneeId" defaultValue={editingTask.assignee?.id ?? ""} disabled={pending || task.status === "SUBMITTED_FOR_REVIEW"}>
           <option value="">Unassigned</option>
           {editingTask.assignee && !employees.some((employee) => employee.id === editingTask.assignee?.id) ? <option value={editingTask.assignee.id}>{editingTask.assignee.name || editingTask.assignee.email} (inactive)</option> : null}
           {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}
-        </select></label>
-        {task.status === "SUBMITTED_FOR_REVIEW" ? <p className="field-wide text-xs text-[var(--muted)]">Review the pending submission or cancel the task before changing its assignee.</p> : null}
+        </select></label> : null}
+        {allowAssignment && task.status === "SUBMITTED_FOR_REVIEW" ? <p className="field-wide text-xs text-[var(--muted)]">Review the pending submission or cancel the task before changing its assignee.</p> : null}
         <div className="workspace-dialog-actions field-wide"><button type="button" className="workspace-cancel" disabled={pending} onClick={() => setEditingTask(null)}>Cancel</button><button type="submit" className="accent-button" disabled={pending} aria-busy={pending}>{pending ? "Saving..." : "Save changes"}</button></div>
       </form> : null}
-      {confirmDelete ? <div className="space-y-3" role="group" aria-label="Confirm task deletion">
+      {confirmDelete && onDelete ? <div className="space-y-3" role="group" aria-label="Confirm task deletion">
         <h3 className="text-sm font-semibold">Delete &ldquo;{task.title}&rdquo;?</h3>
         <p className="text-sm text-[var(--muted)]">This permanently removes the task, checklist, comments, submissions, and reviews. This cannot be undone.</p>
         {task.recurrenceId ? <p className="text-sm text-[var(--muted)]">This deletes only this day&apos;s task. Choose Stop daily repeat first to prevent future tasks.</p> : null}

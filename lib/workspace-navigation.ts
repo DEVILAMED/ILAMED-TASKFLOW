@@ -50,6 +50,7 @@ export function getWorkspaceNavItems(role: WorkspaceRole, workspace: "personal" 
 }
 
 export function getActiveWorkspaceNavHref(role: WorkspaceRole, pathname: string, search: string, hash: string): string | undefined {
+  if (pathname.startsWith("/company-tasks/")) return role === "ADMIN" ? "/admin" : "/company-tasks";
   if (pathname === "/todos") {
     const section = new URLSearchParams(search).get("section");
     return personalNavigation.find(item => new URL(item.href, "https://workspace.local").searchParams.get("section") === section)?.href ?? "/todos";

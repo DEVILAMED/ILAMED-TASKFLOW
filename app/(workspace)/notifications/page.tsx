@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
 import UserAvatar from "@/app/user-avatar";
 
@@ -9,6 +9,7 @@ type Notification = { id: string; type: string; message: string; href: string; r
 const titles: Record<string, string> = { PERSONAL_TASK_REMINDER: "Personal task reminder", TASK_SUBMITTED: "Task submitted for approval", TASK_ASSIGNED: "New task assigned", TASK_APPROVED: "Task approved", TASK_REVISION_REQUESTED: "Revision requested", TASK_REJECTED: "Task reviewed", TASK_COMMENTED: "New task update", MENTIONED: "You were mentioned", DUE_DATE_CHANGED: "Deadline updated", TASK_UNASSIGNED: "Task assignment updated" };
 
 export default function NotificationsPage() {
+  const refreshVersion = useRef({ value: 0 });
   const [read, setRead] = useState("");
   const [type, setType] = useState("");
   const [from, setFrom] = useState("");
@@ -26,16 +27,34 @@ export default function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (invalidRange) return;
+    const version = ++refreshVersion.current.value;
     try {
       const response = await fetch(`/api/notifications?${query}`, { cache: "no-store", signal });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Unable to load notifications.");
-      if (signal?.aborted) return;
+      if (signal?.aborted || version !== refreshVersion.current.value) return;
       setItems(data.notifications || []); setHasMore(Boolean(data.hasMore)); setUnreadCount(data.unreadCount || 0); setError(null);
-    } catch (cause) { if (!signal?.aborted) setError(cause instanceof Error ? cause.message : "Unable to load notifications."); }
-    finally { if (!signal?.aborted) { setLoading(false); setLoadedQuery(query); } }
+    } catch (cause) { if (!signal?.aborted && version === refreshVersion.current.value) setError(cause instanceof Error ? cause.message : "Unable to load notifications."); }
+    finally { if (!signal?.aborted && version === refreshVersion.current.value) { setLoading(false); setLoadedQuery(query); } }
   }, [query, invalidRange]);
-  useEffect(() => { const controller = new AbortController(); void refresh(controller.signal); const timer = window.setInterval(() => void refresh(controller.signal), 30000); return () => { controller.abort(); window.clearInterval(timer); }; }, [refresh]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const requestState = refreshVersion.current;
+    const refreshVisible = () => { if (document.visibilityState === "visible") void refresh(controller.signal); };
+    void refresh(controller.signal);
+    const timer = window.setInterval(refreshVisible, 30000);
+    window.addEventListener("focus", refreshVisible);
+    window.addEventListener("workspace:notifications-updated", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      controller.abort();
+      requestState.value++;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisible);
+      window.removeEventListener("workspace:notifications-updated", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
+  }, [refresh]);
   async function markRead(notificationId?: string) {
     setBusy(true); setError(null);
     try {
@@ -52,7 +71,7 @@ export default function NotificationsPage() {
     <WorkspacePageHeading kicker="INBOX" title="Notifications" action={<button type="button" className="secondary-button workspace-standard-button" disabled={busy || !unreadCount} onClick={() => void markRead()} aria-busy={busy}>Mark all read</button>} />
     {error ? <p role="alert" className="workspace-form-error">{error} <button type="button" onClick={() => void refresh()} className="underline">Try again</button></p> : null}
     <section className="workspace-surface" aria-label="Notification filters">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="workspace-field">Read status<select className="soft-input" value={read} onChange={event => { setRead(event.target.value); setPage(1); }}><option value="">All notifications</option><option value="unread">Unread</option><option value="read">Read</option></select></label>
         <label className="workspace-field">Type<select className="soft-input" value={type} onChange={event => { setType(event.target.value); setPage(1); }}><option value="">All types</option>{Object.entries(titles).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="workspace-field">From<input type="date" value={from} max={to || undefined} aria-invalid={invalidRange} onChange={event => { setFrom(event.target.value); setPage(1); }} /></label>
@@ -64,8 +83,8 @@ export default function NotificationsPage() {
     </section>
     {!invalidRange ? <><section className="workspace-notification-list" aria-label="Notification history">
       {fetching ? <p className="workspace-empty-panel" role="status">Loading notifications…</p> : !items.length && !error ? <p className="workspace-empty-panel">No notifications match this view.</p> : items.map(item => <article key={item.id} className={`workspace-notification-item ${item.readAt ? "" : "is-unread"}`}>
-        {item.actor ? <UserAvatar name={item.actor.name || item.actor.email} src={item.actor.avatarUrl} size={40} /> : null}
-        <div><h2>{titles[item.type] || "Workspace update"}</h2><p>{item.message}</p><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}</time><Link href={item.href} onClick={() => { if (!item.readAt) void markRead(item.id); }}>Open task →</Link></div>
+        <UserAvatar name={item.actor?.name || item.actor?.email || "Workspace"} src={item.actor?.avatarUrl} size={40} />
+        <div className="workspace-notification-content"><h2>{titles[item.type] || "Workspace update"}</h2><p>{item.message}</p><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}</time><Link href={item.href} onClick={() => { if (!item.readAt) void markRead(item.id); }}>Open task →</Link></div>
         {!item.readAt ? <span className="workspace-unread-dot" aria-label="Unread" /> : null}
       </article>)}
     </section>

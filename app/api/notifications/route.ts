@@ -1,3 +1,4 @@
+import { companyTaskAccessWhere } from "@/lib/company-task-access";
 import { taskDateKey } from "@/lib/task-dates";
 import { NextResponse } from "next/server";
 import { companyTaskHref } from "@/lib/company-task-links";
@@ -11,17 +12,13 @@ import { USER_IDENTITY_SELECT, withAvatarUrl } from "@/lib/user-avatar";
 import { accessibleTodoListWhere } from "@/lib/todo-access";
 import { dispatchPersonalTaskReminders } from "@/services/personal-task-reminders";
 
-export async function GET(request: Request) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
-  }
-
-  await dispatchPersonalTaskReminders(user.id);
-  const where: Prisma.NotificationWhereInput = {
+// Keep history, unread badges, and mark-read actions scoped to current access.
+function notificationAccessWhere(user: { id: string; role: string }): Prisma.NotificationWhereInput {
+  return {
     userId: user.id,
     OR: [
       {
+        projectId: { not: COMPANY_TASK_PROJECT_ID },
         project: { is: accessibleProjectWhere(user.id) },
         OR: [
           { taskId: null },
@@ -29,10 +26,28 @@ export async function GET(request: Request) {
           { type: { in: [NotificationType.TASK_ASSIGNED, NotificationType.TASK_UNASSIGNED] } },
         ],
       },
-      { projectId: COMPANY_TASK_PROJECT_ID },
+      {
+        projectId: COMPANY_TASK_PROJECT_ID,
+        ...(user.role === "USER" ? { type: { not: NotificationType.TASK_SUBMITTED } } : {}),
+        OR: [
+          { task: { is: { projectId: COMPANY_TASK_PROJECT_ID, ...companyTaskAccessWhere(user) } } },
+          // The recipient may legitimately lose task access when unassigned.
+          { type: NotificationType.TASK_UNASSIGNED },
+        ],
+      },
       { type: NotificationType.PERSONAL_TASK_REMINDER, todoTask: { is: { list: accessibleTodoListWhere(user.id) } } },
     ],
   };
+}
+
+export async function GET(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  }
+
+  await dispatchPersonalTaskReminders(user.id);
+  const where = notificationAccessWhere(user);
   const params = new URL(request.url).searchParams;
   const from = taskDateKey(params.get("from"));
   const to = taskDateKey(params.get("to"));
@@ -87,7 +102,7 @@ export async function GET(request: Request) {
       readAt: notification.readAt?.toISOString() ?? null,
       createdAt: notification.createdAt.toISOString(),
     })),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function PATCH(request: Request) {
@@ -104,9 +119,9 @@ export async function PATCH(request: Request) {
   }
 
   const where = payload.markAllRead === true
-    ? { userId: user.id, readAt: null }
+    ? { ...notificationAccessWhere(user), readAt: null }
     : typeof payload.notificationId === "string" && payload.notificationId.trim()
-      ? { id: payload.notificationId.trim(), userId: user.id, readAt: null }
+      ? { ...notificationAccessWhere(user), id: payload.notificationId.trim(), readAt: null }
       : null;
 
   if (!where) {

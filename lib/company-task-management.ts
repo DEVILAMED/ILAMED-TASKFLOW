@@ -9,15 +9,19 @@ export function validateCompanyTaskDateRange(startDate: Date | null | undefined,
   return null;
 }
 
-export function validateCompanyTaskUpdateFields(role: string, fields: string[]):
+export function canEditOwnCompanyTask(userId: string | undefined, task: { assignedById?: string | null; assigneeId?: string | null }) {
+  return !!userId && task.assignedById === userId && task.assigneeId === userId;
+}
+
+export function validateCompanyTaskUpdateFields(role: string, fields: string[], ownsTask = false):
   { ok: true } | { ok: false; status: 400 | 403; error: string } {
   const administratorFields = ["title", "description", "startDate", "dueDate", "priority", "assigneeId"];
-  if (role !== "ADMIN" && fields.some((field) => administratorFields.includes(field))) {
-    return { ok: false, status: 403, error: "Only administrators can edit task details, date ranges, priorities, or assignments." };
+  if (role !== "ADMIN" && fields.some((field) => administratorFields.includes(field) && (!ownsTask || field === "assigneeId"))) {
+    return { ok: false, status: 403, error: "You can only edit details of tasks you created for yourself. Only administrators can change assignments." };
   }
   const allowedFields = role === "ADMIN"
     ? [...administratorFields, "status", "notes"]
-    : ["status", "notes", "action"];
+    : [...(ownsTask ? administratorFields.filter(field => field !== "assigneeId") : []), "status", "notes", "action"];
   if (fields.some((field) => !allowedFields.includes(field))) {
     return { ok: false, status: 400, error: "Unsupported task update." };
   }

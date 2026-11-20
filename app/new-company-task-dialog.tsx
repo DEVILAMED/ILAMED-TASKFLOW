@@ -11,7 +11,7 @@ export function NewTaskButton({ className = "" }: { className?: string }) {
   return <button type="button" className={`accent-button workspace-new-task ${className}`} aria-haspopup="dialog" aria-controls="workspace-new-task" onClick={() => window.dispatchEvent(new Event("workspace:new-task"))}><Plus size={17} strokeWidth={1.8} aria-hidden="true" />New Task</button>;
 }
 
-export default function NewCompanyTaskDialog({ employees: allEmployees, departments = [] }: { employees: Employee[]; departments?: DepartmentOption[] }) {
+export default function NewCompanyTaskDialog({ employees: allEmployees, departments = [], selfAssigneeId }: { employees: Employee[]; departments?: DepartmentOption[]; selfAssigneeId?: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -56,7 +56,7 @@ export default function NewCompanyTaskDialog({ employees: allEmployees, departme
     setSaving(true); setError(null);
     try {
       const response = await fetch("/api/company-tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        title: values.get("title"), description: values.get("description"), assigneeId: values.get("assigneeId"), priority: values.get("priority"), startDate, dueDate: repeat === "DAILY" ? startDate : endDate, repeat, repeatUntil: repeat === "DAILY" ? repeatUntil || null : null,
+        title: values.get("title"), description: values.get("description"), assigneeId: selfAssigneeId || values.get("assigneeId"), priority: values.get("priority"), startDate, dueDate: repeat === "DAILY" ? startDate : endDate, repeat, repeatUntil: repeat === "DAILY" ? repeatUntil || null : null,
         checklistItems: String(values.get("checklist") || "").split(/\r?\n/).map(item => item.trim()).filter(Boolean),
       }) });
       const data = await response.json();
@@ -71,7 +71,7 @@ export default function NewCompanyTaskDialog({ employees: allEmployees, departme
     <form ref={form} onSubmit={event => void submit(event)} className="workspace-task-form">
       <label className="workspace-field field-wide">Title *<input autoFocus name="title" required minLength={2} maxLength={200} placeholder="Short descriptive title" /></label>
       <label className="workspace-field field-wide">Description<textarea name="description" maxLength={2000} rows={3} placeholder="Scope, deliverables, references…" /></label>
-      <label className="workspace-field">Assign to *<select name="assigneeId" required defaultValue=""><option value="" disabled>Choose a team member</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select></label>
+      {selfAssigneeId ? <p className="workspace-field">Assigned to you</p> : <label className="workspace-field">Assign to *<select name="assigneeId" required defaultValue=""><option value="" disabled>Choose a team member</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select></label>}
       <label className="workspace-field">Priority<select name="priority" defaultValue="MEDIUM"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
       <label className="workspace-field field-wide">Repeat<select name="repeat" value={repeat} disabled={saving} onChange={event => setRepeat(event.target.value)}><option value="NONE">Does not repeat</option><option value="DAILY">Daily on working days</option></select></label>
       <fieldset className="field-wide grid gap-3 sm:grid-cols-2">
@@ -81,9 +81,9 @@ export default function NewCompanyTaskDialog({ employees: allEmployees, departme
       </fieldset>
       {repeat === "DAILY" ? <p className="field-wide text-xs text-[var(--muted)]">A fresh task is created each working day, with its own checklist, submission, and review. Sundays and employee leave days are skipped. Leave the last date blank to keep repeating.</p> : null}
       <label className="workspace-field field-wide">Checklist<textarea name="checklist" rows={3} maxLength={4200} placeholder="One step per line" /><span className="workspace-field-hint">Up to 20 steps. Submitted work goes to the review queue.</span></label>
-      {!employees.length ? <p className="field-wide text-sm text-[var(--muted)]">No eligible employees are available to assign work to.</p> : null}
+      {!selfAssigneeId && !employees.length ? <p className="field-wide text-sm text-[var(--muted)]">No eligible employees are available to assign work to.</p> : null}
       {error ? <p role="alert" className="field-wide workspace-form-error">{error}</p> : null}
-      <div className="workspace-dialog-actions field-wide"><button type="button" className="workspace-cancel" onClick={close} disabled={saving}>Cancel</button><button type="submit" className="accent-button" disabled={saving || !employees.length} aria-busy={saving}>{saving ? "Creating…" : "Create"}</button></div>
+      <div className="workspace-dialog-actions field-wide"><button type="button" className="workspace-cancel" onClick={close} disabled={saving}>Cancel</button><button type="submit" className="accent-button" disabled={saving || (!selfAssigneeId && !employees.length)} aria-busy={saving}>{saving ? "Creating…" : "Create"}</button></div>
     </form>
   </dialog>;
 }

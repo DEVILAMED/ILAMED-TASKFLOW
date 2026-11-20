@@ -57,9 +57,6 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER) {
-    return NextResponse.json({ ok: false, error: "Manager access is required to assign tasks." }, { status: 403 });
-  }
 
   let payload: {
     title?: unknown;
@@ -80,7 +77,11 @@ export async function POST(request: Request) {
 
   const title = typeof payload?.title === "string" ? payload.title.trim() : "";
   const description = typeof payload?.description === "string" ? payload.description.trim() : "";
-  const assigneeId = typeof payload?.assigneeId === "string" ? payload.assigneeId.trim() : "";
+  const requestedAssigneeId = typeof payload?.assigneeId === "string" ? payload.assigneeId.trim() : "";
+  if (user.role === UserRole.USER && requestedAssigneeId && requestedAssigneeId !== user.id) {
+    return NextResponse.json({ ok: false, error: "You can only create tasks for yourself." }, { status: 403 });
+  }
+  const assigneeId = user.role === UserRole.USER ? user.id : requestedAssigneeId;
   const priority = payload?.priority === undefined ? "MEDIUM" : payload.priority;
   const checklistItems = payload?.checklistItems === undefined ? [] : payload.checklistItems;
   if (title.length < 2 || title.length > 200) {

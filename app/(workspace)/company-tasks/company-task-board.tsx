@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import EmployeeTaskCalendar from "@/app/employee-task-calendar";
 import TaskChecklistProgress from "@/app/task-checklist-progress";
 import { getChecklistProgress } from "@/lib/task-progress";
 import { taskDateKey, taskIsScheduledOn } from "@/lib/task-dates";
 import { companyScheduleOverlaps, companyTaskSchedule, employeeDayKey, employeeLeaveDays, formatCompanyTaskSchedule, isCompanyTaskOverdue, isCompanyWorkday, isSunday, type LeaveDaysByEmployee } from "@/lib/company-workdays";
 import CompanyTaskEditor, { type CompanyTaskChanges } from "@/app/company-task-editor";
+import { canEditOwnCompanyTask } from "@/lib/company-task-management";
 import SubmissionFilePicker from "@/app/submission-file-picker";
 import SubmissionImagePicker from "@/app/submission-image-picker";
 import TaskSubmissionHistory from "@/app/task-submission-history";
@@ -78,15 +80,16 @@ export default function CompanyTaskBoard({
   initialFeedback = [],
   leaveByEmployee,
   employeeId,
+  detailTaskId,
 }: {
   isAdmin: boolean;
   employees: Employee[];
   initialTasks: CompanyTask[];
   leaveByEmployee: LeaveDaysByEmployee;
   employeeId?: string;
+  detailTaskId?: string;
   initialFeedback?: { id: string; taskId: string; feedback: string; reviewer: string; rating: number | null }[];
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const params = useSearchParams();
   function setParam(key: string, value: string | null) {
@@ -116,8 +119,17 @@ export default function CompanyTaskBoard({
   const [previousTasks, setPreviousTasks] = useState(initialTasks);
   if (previousTasks !== initialTasks) { setPreviousTasks(initialTasks); setTasks(initialTasks); }
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const expandedTaskId = params.get("task");
-  const setExpandedTaskId = (value: string | null) => setParam("task", value);
+  const expandedTaskId = detailTaskId;
+  const requestedReturn = params.get("returnTo");
+  const defaultReturn = isAdmin ? "/admin" : "/company-tasks";
+  const backHref = requestedReturn && /^\/(admin|company-tasks|manager)(\?|$)/.test(requestedReturn) && !requestedReturn.includes("\\") ? requestedReturn : defaultReturn;
+  function setExpandedTaskId(value: string | null) {
+    if (!value) { router.push(backHref); return; }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("task");
+    const returnTo = detailTaskId ? backHref : `${url.pathname}${url.search}`;
+    router.push(`/company-tasks/${encodeURIComponent(value)}?returnTo=${encodeURIComponent(returnTo)}`);
+  }
   const [comments, setComments] = useState<Record<string, TaskComment[]>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -141,15 +153,14 @@ export default function CompanyTaskBoard({
     ? scheduledTasks.filter(task => task.recurrenceId === activeTask.recurrenceId)
     : [];
   const workDates = activeSeriesTasks.map(task => taskDateKey(task.recurrenceDate ?? task.dueDate)).filter((day): day is string => Boolean(day)).sort();
-  const hasActiveTask = Boolean(activeTask);
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog || !expandedTaskId) return;
-    dialog.showModal();
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { dialog.close(); document.body.style.overflow = previous; };
-  }, [expandedTaskId, hasActiveTask]);
+    const legacyTaskId = params.get("task");
+    if (!detailTaskId && legacyTaskId) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("task");
+      router.replace(`/company-tasks/${encodeURIComponent(legacyTaskId)}?returnTo=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
+    }
+  }, [params, detailTaskId, router]);
   const scheduledToday = (task: ScheduledCompanyTask) => isCompanyWorkday(today, task.leaveDays) && taskIsScheduledOn(task.schedule, today);
   function matchesFocus(task: ScheduledCompanyTask, value: string) {
     const closed = ["APPROVED", "DONE", "REJECTED", "CANCELLED"].includes(task.status);
@@ -302,7 +313,7 @@ export default function CompanyTaskBoard({
   }
 
   function toggleComments(taskId: string) {
-    setExpandedTaskId(expandedTaskId === taskId ? null : taskId);
+    setExpandedTaskId(taskId);
     setError(null);
     setNotice(null);
   }
@@ -404,7 +415,7 @@ export default function CompanyTaskBoard({
 
   return (
     <div className={`workspace-task-board flex flex-col gap-5 ${isAdmin ? "is-admin" : "is-employee"} ${view === "calendar" ? "is-calendar" : ""}`}>
-      <div className="workspace-task-filters">
+      {!detailTaskId ? <><div className="workspace-task-filters">
         <input type="search" aria-label="Search tasks" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks…" className="soft-input" />
         <select aria-label="Filter by status" value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setFocus("ALL"); }} className="soft-input"><option value="ALL">All statuses</option>{(Object.keys(statusLabels) as TaskStatus[]).map(status => <option key={status} value={status}>{statusLabels[status]}</option>)}</select>
         {isAdmin ? <select aria-label="Filter by employee" value={employeeFilter} onChange={event => setEmployeeFilter(event.target.value)} className="soft-input"><option value="ALL">All assignees</option><option value="UNASSIGNED">Unassigned</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select> : <select aria-label="Filter by priority" value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} className="soft-input"><option value="ALL">All priorities</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>}
@@ -566,9 +577,12 @@ export default function CompanyTaskBoard({
           </div>
         )}
       </section>
-      {activeTask ? <dialog ref={dialogRef} aria-labelledby="task-detail-title" onClose={() => { if (!dialogRef.current?.open) setExpandedTaskId(null); }} className="fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-none w-full max-w-xl border-l border-[var(--stroke)] bg-[var(--panel)] p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-black/40">
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--stroke)] p-5"><div><p className="text-xs text-[var(--muted)]">Task details</p><h2 id="task-detail-title" className="mt-1 text-xl font-semibold">{activeTask.title}</h2></div><button autoFocus type="button" onClick={() => dialogRef.current?.close()} className="secondary-button px-3 py-2">Close</button></div>
-        {[activeTask].map((task) => <div key={task.id} className="space-y-5 p-5">
+      </> : null}
+      {activeTask ? <article aria-labelledby="task-detail-title" className="task-detail-page">
+        <Link href={backHref} className="mb-5 inline-flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--foreground)]">← Back to tasks</Link>
+        <header className="mb-6 border-b border-[var(--stroke)] pb-6"><p className="workspace-page-kicker">TASK DETAILS</p><h1 id="task-detail-title" className="mt-2 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{activeTask.title}</h1><div className="mt-4 flex flex-wrap items-center gap-3 text-sm"><span className="rounded-full bg-[var(--panel)] px-3 py-1 font-medium text-[var(--accent)]">{statusLabels[activeTask.status]}</span><span className="text-[var(--muted)]">{priorityLabels[activeTask.priority]} priority</span><span className="text-[var(--muted)]">{formatCompanyTaskSchedule(activeTask.schedule)}</span></div></header>
+        {[activeTask].map((task) => <div key={task.id} className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <aside className="space-y-5 rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 xl:col-start-2 xl:row-start-1">
           {task.recurrenceId ? <section className="grid gap-2">
             <h3 className="text-sm font-semibold">Daily submissions</h3>
             <p className="text-xs text-[var(--muted)]">One repeating task. Each day has its own checklist, submission, and approval.</p>
@@ -596,41 +610,45 @@ export default function CompanyTaskBoard({
             </label>
             <datalist id="task-work-dates">{activeSeriesTasks.map(item => <option key={item.id} value={taskDateKey(item.recurrenceDate ?? item.dueDate) ?? ""} label={statusLabels[item.status]} />)}</datalist>
           </section> : null}
-          {isAdmin ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} onDelete={() => deleteTask(task)} /> : null}
+          {isAdmin || canEditOwnCompanyTask(employeeId, { assignedById: task.assignedBy?.id, assigneeId: task.assignee?.id }) ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} allowAssignment={isAdmin} onDelete={isAdmin ? () => deleteTask(task) : undefined} /> : null}
           {isAdmin ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}
           <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatCompanyTaskSchedule(task.schedule)}</p>
           {task.schedule.dueDate !== taskDateKey(task.dueDate) ? <p className="text-xs text-[var(--muted)]">Original deadline {taskDateKey(task.dueDate)}. The displayed schedule accounts for Sundays and recorded leave.</p> : null}
           <TaskChecklistProgress title={task.title} items={task.checklistItems} />
           <p className="text-xs text-[var(--muted)]">Checklist completion records steps finished; approval is a separate manager decision.</p>
-          <p className="whitespace-pre-wrap text-sm">{task.description || "No additional instructions."}</p>
           {task.assignee ? <p className="user-identity text-sm"><UserAvatar name={employeeLabel(task.assignee)} src={task.assignee.avatarUrl} />{employeeLabel(task.assignee)}</p> : null}
           <TaskAssigner task={task} />
-          {isAdmin && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
-          {isAdmin && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
+          {(isAdmin || task.assignee?.id !== employeeId) && task.status === "SUBMITTED_FOR_REVIEW" ? <Link href={`/reviews?task=${encodeURIComponent(task.id)}`} className="accent-button inline-flex px-4 py-2 text-sm">Review submission</Link> : null}
+          {(isAdmin || task.assignee?.id !== employeeId) && task.status === "ON_HOLD" ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "IN_PROGRESS")} className="accent-button px-3 py-2 text-sm">Resume task</button> : null}
+          {(isAdmin || task.assignee?.id !== employeeId) && ["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "ON_HOLD")} className="secondary-button px-3 py-2 text-sm">Put on hold</button> : null}
           {isAdmin ? <section className="grid gap-3"><label className="grid gap-1 text-xs">Assigned to<select className="soft-input rounded-lg p-2" value={task.assignee?.id ?? ""} disabled={pendingId === task.id || task.status === "SUBMITTED_FOR_REVIEW"} title={task.status === "SUBMITTED_FOR_REVIEW" ? "Review the pending submission or cancel the task before changing its assignee." : undefined} onChange={(event) => void reassignTask(task, event.target.value)}><option value="">Unassigned</option>{task.assignee && !employees.some((employee) => employee.id === task.assignee?.id) ? <option value={task.assignee.id}>{employeeLabel(task.assignee)} (inactive)</option> : null}{employees.map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}</select></label><label className="grid gap-1 text-xs">Priority<select className="soft-input rounded-lg p-2" value={task.priority} disabled={pendingId === task.id} onChange={(event) => void updatePriority(task, event.target.value as TaskPriority)}>{(Object.keys(priorityLabels) as TaskPriority[]).map((value) => <option key={value} value={value}>{priorityLabels[value]}</option>)}</select></label>{!["APPROVED", "CANCELLED"].includes(task.status) ? <button type="button" disabled={pendingId === task.id} onClick={() => void updateStatus(task, "CANCELLED")} className="secondary-button px-3 py-2 text-xs">Cancel task</button> : null}</section> : null}
-          {!isAdmin ? <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
+          {!isAdmin && task.assignee?.id === employeeId ? <TaskActions key={`${task.id}:${task.status}`} task={task} pending={pendingId === task.id} onUpdate={updateStatus} /> : null}
+          <div className="border-t border-[var(--stroke)] pt-4 text-xs text-[var(--muted)]"><p>Created {new Date(task.createdAt).toLocaleDateString()}</p><p className="mt-2">Updated {new Date(task.updatedAt).toLocaleDateString()}</p></div>
+          </aside>
+          <div className="order-first min-w-0 space-y-6 xl:order-none xl:col-start-1 xl:row-start-1">
           {notice ? <p role="status" className="text-sm text-emerald-600">{notice}</p> : null}
           {error ? <p role="alert" className="text-sm text-rose-500">{error}</p> : null}
           {initialFeedback.filter((review) => review.taskId === task.id).length ? <section><h3 className="mb-2 text-sm font-semibold">Review feedback</h3>{initialFeedback.filter((review) => review.taskId === task.id).map((review) => <article key={review.id} className="mb-2 rounded-xl border border-[var(--stroke)] p-3"><p className="whitespace-pre-wrap text-sm">{review.feedback}</p><p className="mt-2 text-xs text-[var(--muted)]">{review.reviewer}{review.rating ? ` / ${review.rating}/5` : ""}</p></article>)}</section> : null}
-          {task.checklistItems.length ? <section><h3 className="mb-2 text-sm font-semibold">Checklist</h3>{task.checklistItems.map((item) => <label key={item.id} className="flex items-start gap-3 py-2 text-sm"><input type="checkbox" checked={item.isCompleted} disabled={isAdmin || pendingId === task.id} onChange={(event) => void updateChecklistItem(task, item, event.target.checked)} /><span className={item.isCompleted ? "line-through opacity-60" : ""}>{item.title}</span></label>)}</section> : null}
-          <TaskSubmissionHistory taskId={task.id} updatedAt={task.updatedAt} />
-                          <div className="mx-auto max-w-3xl">
-                            <h3 className="text-sm font-semibold text-white/80">Progress updates</h3>
-                            {commentsLoading ? <p className="mt-3 text-xs text-white/40">Loading updates...</p> : null}
+          <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><h2 className="mb-3 text-base font-semibold">Overview</h2><p className="whitespace-pre-wrap break-words text-sm leading-7 text-[var(--muted)]">{task.description || "No additional instructions."}</p></section>
+          {task.checklistItems.length ? <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><h2 className="mb-3 text-base font-semibold">Checklist</h2>{task.checklistItems.map((item) => <label key={item.id} className="flex items-start gap-3 border-b border-[var(--stroke)] py-3 text-sm last:border-0"><input type="checkbox" checked={item.isCompleted} disabled={isAdmin || task.assignee?.id !== employeeId || pendingId === task.id} onChange={(event) => void updateChecklistItem(task, item, event.target.checked)} /><span className={item.isCompleted ? "line-through opacity-60" : ""}>{item.title}</span></label>)}</section> : null}
+          <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6"><TaskSubmissionHistory taskId={task.id} updatedAt={task.updatedAt} /></div>
+                          <section className="rounded-2xl border border-[var(--stroke)] bg-[var(--panel)] p-5 sm:p-6">
+                            <h3 className="text-sm font-semibold text-[var(--foreground)]">Progress updates</h3>
+                            {commentsLoading ? <p className="mt-3 text-xs text-[var(--muted)]">Loading updates...</p> : null}
                             {comments[task.id]?.length ? (
                               <div className="mt-3 grid gap-2">
                                 {comments[task.id].map((comment) => (
-                                  <article key={comment.id} className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+                                  <article key={comment.id} className="rounded-xl border border-[var(--stroke)] px-3 py-2.5">
                                     <div className="flex flex-wrap justify-between gap-2">
-                                      <p className="user-identity text-xs font-semibold text-white/70"><UserAvatar name={comment.author} src={comment.authorAvatarUrl} size={24} />{comment.author}</p>
-                                      <time className="text-[10px] text-white/35">{new Date(comment.createdAt).toLocaleString()}</time>
+                                      <p className="user-identity text-xs font-semibold text-[var(--foreground)]"><UserAvatar name={comment.author} src={comment.authorAvatarUrl} size={24} />{comment.author}</p>
+                                      <time className="text-[10px] text-[var(--muted)]">{new Date(comment.createdAt).toLocaleString()}</time>
                                     </div>
-                                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-white/55">{comment.content}</p>
+                                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--muted)]">{comment.content}</p>
                                   </article>
                                 ))}
                               </div>
                             ) : !commentsLoading && comments[task.id] ? (
-                              <p className="mt-2 text-xs text-white/40">No updates yet.</p>
+                              <p className="mt-2 text-xs text-[var(--muted)]">No updates yet.</p>
                             ) : null}
                             <form onSubmit={(event) => void addComment(event, task.id)} className="mt-3 flex flex-col gap-2 sm:flex-row">
                               <textarea
@@ -647,10 +665,11 @@ export default function CompanyTaskBoard({
                                 {commentSubmitting ? "Posting..." : "Post update"}
                               </button>
                             </form>
-                          </div>
+                          </section>
 
+          </div>
         </div>)}
-      </dialog> : null}
+      </article> : null}
 
     </div>
   );

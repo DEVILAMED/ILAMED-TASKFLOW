@@ -77,7 +77,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userId, user
   return <div className="workspace-theme min-h-screen lg:flex">
     <PresenceHeartbeat />
     <PersonalTaskReminders key={userId || userEmail} />
-    {activeWorkspace === "projects" && userRole !== "USER" ? <Suspense fallback={null}><NewCompanyTaskDialog employees={taskEmployees} departments={taskDepartments} /></Suspense> : null}
+    {activeWorkspace === "projects" ? <Suspense fallback={null}><NewCompanyTaskDialog employees={taskEmployees} departments={taskDepartments} selfAssigneeId={userRole === "USER" ? userId : undefined} /></Suspense> : null}
     <a href="#workspace-main" className="workspace-skip-link">Skip to content</a>
     <aside className="workspace-sidebar hidden shrink-0 lg:sticky lg:top-0 lg:flex lg:h-screen" data-guide="sidebar">
       <Brand />
@@ -98,7 +98,7 @@ export function WorkspaceShell({ title, currentWorkspace, userName, userId, user
         <div className="ml-auto flex items-center gap-3 sm:gap-4">
           {topbarRight ? <div className="hidden xl:block">{topbarRight}</div> : null}
           <DashboardGuide account={userId || userEmail} role={userRole} workspace={activeWorkspace}/>
-          <div className="workspace-topbar-notifications" data-guide="notifications"><NotificationsInbox /></div>
+          <div className="workspace-topbar-notifications" data-guide="notifications"><NotificationsInbox key={`${userId || userEmail}:${userRole}`} /></div>
           <details ref={accountMenu} className="workspace-account-menu" data-guide="account-menu" onToggle={event => { if (event.currentTarget.open) announceMenuOpened(event.currentTarget); }}>
             <summary aria-label={`Account options for ${userName}`} className="workspace-user-chip">
               <UserAvatar name={userName || userEmail} src={userAvatarUrl} className="workspace-avatar" />

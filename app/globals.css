@@ -477,11 +477,12 @@ html[data-theme="dark"] .workspace-theme { --background: #121a28; --foreground: 
 .workspace-task-board.is-admin table select[data-priority="LOW"] { color: #526780; }
 .workspace-notification-list { overflow: hidden; }
 .workspace-notification-list > .workspace-empty-panel { border: 0; box-shadow: none; }
-.workspace-notification-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--stroke); padding: 18px 16px; }
+.workspace-notification-item { display: grid; grid-template-columns: 40px minmax(0,1fr) 8px; align-items: start; gap: 12px; border-bottom: 1px solid var(--stroke); padding: 18px 16px; }
 .workspace-notification-item:last-child { border-bottom: 0; }
 .workspace-notification-item.is-unread { background: color-mix(in srgb, #eaf7ff 35%, var(--panel)); }
+.workspace-notification-content { min-width: 0; overflow-wrap: anywhere; }
 .workspace-notification-item h2 { font-size: 16px; font-weight: 600; line-height: 24px; }
-.workspace-notification-item p { margin-top: 3px; color: #536c8b; font-size: 14px; line-height: 22px; }
+.workspace-notification-item p { margin-top: 3px; color: var(--muted); font-size: 14px; line-height: 22px; }
 .workspace-notification-item time { display: block; margin-top: 4px; color: var(--subtle); font-family: var(--font-mono); font-size: 10px; }
 .workspace-notification-item a { display: inline-block; margin-top: 6px; color: var(--accent); font-size: 12px; }
 .workspace-unread-dot { width: 8px; height: 8px; flex-shrink: 0; margin-top: 6px; border-radius: 50%; background: #7663ed; }

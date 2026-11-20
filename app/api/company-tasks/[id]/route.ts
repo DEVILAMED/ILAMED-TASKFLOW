@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 
 import { canChangeCompanyTaskStatus } from "@/lib/company-task-workflow";
-import { deleteManagedCompanyTask, parseCompanyTaskDetails, validateCompanyTaskUpdateFields, validateCompanyTaskDateRange } from "@/lib/company-task-management";
+import { canEditOwnCompanyTask, deleteManagedCompanyTask, parseCompanyTaskDetails, validateCompanyTaskUpdateFields, validateCompanyTaskDateRange } from "@/lib/company-task-management";
 import { companyTaskAccessWhere } from "@/lib/company-task-access";
 import { validateSubmissionImages } from "@/lib/submission-images";
 import { MAX_SUBMISSION_UPLOAD_BYTES, validateSubmissionAttachments } from "@/lib/submission-attachments";
@@ -81,22 +81,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const status = payload?.status;
   const priority = payload?.priority;
   const assigneeId = payload?.assigneeId;
-  const fieldAccess = validateCompanyTaskUpdateFields(user.role, submittedKeys);
-  if (!fieldAccess.ok) {
-    return NextResponse.json({ ok: false, error: fieldAccess.error }, { status: fieldAccess.status });
-  }
   const details = parseCompanyTaskDetails(payload);
   if (!details.ok) {
     return NextResponse.json({ ok: false, error: details.error }, { status: 400 });
   }
-  if (user.role !== UserRole.ADMIN && (!reportBlocker && status === undefined)) {
-    return NextResponse.json({ ok: false, error: "Only administrators can change assignment or priority." }, { status: 403 });
-  }
   if (status !== undefined && (typeof status !== "string" || !Object.values(TaskStatus).includes(status as TaskStatus))) {
     return NextResponse.json({ ok: false, error: "Choose a valid task status." }, { status: 400 });
-  }
-  if (priority !== undefined && user.role !== UserRole.ADMIN) {
-    return NextResponse.json({ ok: false, error: "Only administrators can change task priority." }, { status: 403 });
   }
   if (priority !== undefined && (typeof priority !== "string" || !["LOW", "MEDIUM", "HIGH"].includes(priority))) {
     return NextResponse.json({ ok: false, error: "Choose a valid task priority." }, { status: 400 });
@@ -141,9 +131,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         projectId: COMPANY_TASK_PROJECT_ID,
         ...companyTaskAccessWhere(user),
       },
-      select: { id: true, title: true, assigneeId: true, status: true, startDate: true, dueDate: true, updatedAt: true },
+      select: { id: true, title: true, assigneeId: true, assignedById: true, status: true, startDate: true, dueDate: true, updatedAt: true },
     });
     if (!existing) return null;
+
+    const fieldAccess = validateCompanyTaskUpdateFields(user.role, submittedKeys, canEditOwnCompanyTask(user.id, existing));
+    if (!fieldAccess.ok) return { fieldAccessError: fieldAccess };
 
     if (existing.status === TaskStatus.SUBMITTED_FOR_REVIEW && nextAssigneeId !== undefined && nextAssigneeId !== existing.assigneeId) {
       return { assignmentError: true as const };
@@ -173,6 +166,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         id: existing.id,
         projectId: COMPANY_TASK_PROJECT_ID,
         assigneeId: existing.assigneeId,
+        assignedById: existing.assignedById,
         status: existing.status,
         updatedAt: existing.updatedAt,
       },
@@ -303,6 +297,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   if (!task) {
     return NextResponse.json({ ok: false, error: "Task not found or access denied." }, { status: 404 });
+  }
+
+  if ("fieldAccessError" in task && task.fieldAccessError) {
+    return NextResponse.json({ ok: false, error: task.fieldAccessError.error }, { status: task.fieldAccessError.status });
   }
 
   if ("conflictError" in task) {
