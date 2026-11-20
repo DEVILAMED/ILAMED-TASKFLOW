@@ -21,6 +21,7 @@ export type ReviewPeriod = ReviewWindow & { value: string; label: string; startD
 export type ReviewEvidence = {
   id: string;
   taskId: string;
+  taskSeriesId?: string | null;
   employeeId: string;
   rating: number | null;
   createdAt: Date | string;
@@ -80,7 +81,7 @@ export function summarizeReviewQuality(reviews: readonly ReviewEvidence[], windo
     if (!isReviewRating(review.rating) || !review.taskId || !review.employeeId) continue;
     reviewCount++;
     // Attribute work to its submitter, even if the task has since been reassigned.
-    const key = JSON.stringify([review.employeeId, review.taskId]);
+    const key = JSON.stringify([review.employeeId, review.taskSeriesId ? "series" : "task", review.taskSeriesId ?? review.taskId]);
     const previous = latest.get(key);
     if (!previous || timestamp > new Date(previous.createdAt).getTime() ||
       (timestamp === new Date(previous.createdAt).getTime() && review.id > previous.id)) {

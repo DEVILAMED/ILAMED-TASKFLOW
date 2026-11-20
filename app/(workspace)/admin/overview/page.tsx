@@ -1,3 +1,5 @@
+import { companyTaskSnapshot } from "@/lib/company-task-series";
+import { companyTaskRepeatSelect } from "@/lib/company-task-repeat";
 import { redirect } from "next/navigation";
 import OverviewDashboard from "./overview-dashboard";
 import "./overview.css";
@@ -25,7 +27,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const reviewMonths = getReviewMonths(now);
   const departments = await prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
   const selectedDepartment = resolveDepartmentFilter((await searchParams).department, departments);
-  const [userRows, tasks, allReviews, recentChanges] = await Promise.all([
+  const [userRows, taskRows, allReviews, recentChanges] = await Promise.all([
     prisma.user.findMany({
       where: { role: { not: "ADMIN" }, ...departmentEmployeeWhere(selectedDepartment) },
       orderBy: [{ name: "asc" }, { email: "asc" }],
@@ -36,6 +38,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     prisma.task.findMany({
       where: { projectId: COMPANY_TASK_PROJECT_ID, ...departmentTaskWhere(selectedDepartment) },
       select: {
+        ...companyTaskRepeatSelect,
         id: true,
         assigneeId: true,
         title: true,
@@ -57,6 +60,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     getReviewEvidence({ start: reviewMonths[0].start, end: period.end }),
     prisma.taskStatusHistory.findMany({ where: { task: { projectId: COMPANY_TASK_PROJECT_ID, ...departmentTaskWhere(selectedDepartment) } }, orderBy: { createdAt: "desc" }, take: 6, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, actor: { select: { name: true, email: true } }, task: { select: { title: true } } } }),
   ]);
+  const tasks = companyTaskSnapshot(taskRows);
   const users = userRows.map(withAvatarUrl);
   const employeeIds = new Set(users.map(user => user.id));
   const reviews = selectedDepartment === "ALL" ? allReviews : allReviews.filter(review => employeeIds.has(review.employeeId));
@@ -86,7 +90,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     return quality ? [{ ...quality, label: person.name || person.email, avatarUrl: person.avatarUrl }] : [];
   }).slice(0, 5);
   const employees = users.map((person) => {
-    const assigned = tasks.filter((task) => task.assignee?.id === person.id);
+    const assigned = companyTaskSnapshot(taskRows.filter(task => task.assignee?.id === person.id));
     return {
       id: person.id, name: person.name || person.email, email: person.email, avatarUrl: person.avatarUrl,
       designation: person.employeeProfile?.designation || (person.role === "MANAGER" ? "Team manager" : "Team member"),

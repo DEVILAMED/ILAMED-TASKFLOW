@@ -13,6 +13,7 @@ import TaskSubmissionHistory from "@/app/task-submission-history";
 import UserAvatar from "@/app/user-avatar";
 import CompanyTaskRepeatControl from "@/app/company-task-repeat-control";
 import type { CompanyTaskRepeatInfo } from "@/lib/company-task-repeat";
+import { groupCompanyTaskSeries } from "@/lib/company-task-series";
 
 type TaskStatus = "TODO" | "ACCEPTED" | "IN_PROGRESS" | "ON_HOLD" | "SUBMITTED_FOR_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | "CANCELLED" | "DONE";
 type TaskAction = TaskStatus | "REPORT_BLOCKER";
@@ -150,13 +151,16 @@ export default function CompanyTaskBoard({
     if (value === "OTHER_CLOSED") return task.status === "REJECTED" || task.status === "CANCELLED";
     if (value === "NOT_STARTED") return task.status === "TODO" || task.status === "ACCEPTED";
     if (value === "IN_FLIGHT") return ["IN_PROGRESS", "ON_HOLD", "REVISION_REQUESTED"].includes(task.status);
-    if (value === "CREATED_TODAY") return employeeDayKey(new Date(task.createdAt)) === today;
+    if (value === "CREATED_TODAY") {
+      const first = task.recurrenceId ? tasks.filter(item => item.recurrenceId === task.recurrenceId).reduce((earliest, item) => item.createdAt < earliest ? item.createdAt : earliest, task.createdAt) : task.createdAt;
+      return employeeDayKey(new Date(first)) === today;
+    }
     if (value === "TODAY") return !closed && scheduledToday(task);
     if (value === "OVERDUE") return task.overdue;
     if (value === "REVISION") return task.status === "REVISION_REQUESTED";
     return true;
   }
-  const visibleTasks = scheduledTasks.filter((task) => {
+  const matchingTasks = scheduledTasks.filter((task) => {
     const query = search.trim().toLocaleLowerCase();
     const matchesSearch = !query
       || task.title.toLocaleLowerCase().includes(query)
@@ -167,6 +171,7 @@ export default function CompanyTaskBoard({
       && (priorityFilter === "ALL" || task.priority === priorityFilter)
       && (dueFilter === "ALL" || (dueFilter === "OVERDUE" ? task.overdue : dueFilter === "TODAY" ? scheduledToday(task) : Boolean(task.dueDate)));
   }).sort((a, b) => sort === "priority" ? (["HIGH", "MEDIUM", "LOW"].indexOf(a.priority) - ["HIGH", "MEDIUM", "LOW"].indexOf(b.priority)) : sort === "updated" ? b.updatedAt.localeCompare(a.updatedAt) : (a.schedule.dueDate || "9999").localeCompare(b.schedule.dueDate || "9999"));
+  const visibleTasks = view === "calendar" ? matchingTasks : groupCompanyTaskSeries(matchingTasks).map(group => group.task);
 
   useEffect(() => {
     let lastRefresh = 0;
@@ -551,6 +556,12 @@ export default function CompanyTaskBoard({
       {activeTask ? <dialog ref={dialogRef} aria-labelledby="task-detail-title" onClose={() => { if (!dialogRef.current?.open) setExpandedTaskId(null); }} className="fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-none w-full max-w-xl border-l border-[var(--stroke)] bg-[var(--panel)] p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-black/40">
         <div className="flex items-start justify-between gap-4 border-b border-[var(--stroke)] p-5"><div><p className="text-xs text-[var(--muted)]">Task details</p><h2 id="task-detail-title" className="mt-1 text-xl font-semibold">{activeTask.title}</h2></div><button autoFocus type="button" onClick={() => dialogRef.current?.close()} className="secondary-button px-3 py-2">Close</button></div>
         {[activeTask].map((task) => <div key={task.id} className="space-y-5 p-5">
+          {task.recurrenceId ? <section className="grid gap-2">
+            <h3 className="text-sm font-semibold">Daily submissions</h3>
+            <p className="text-xs text-[var(--muted)]">One repeating task. Each day has its own checklist, submission, and approval.</p>
+            <p className="text-xs text-[var(--muted)]">Repeat range: {task.recurrence?.startDate.slice(0, 10) ?? "Not set"} to {task.recurrence?.endDate?.slice(0, 10) ?? "No end date"}</p>
+            <label className="grid gap-1 text-xs">Work date<select className="soft-input h-10 rounded-lg px-2" value={task.id} onChange={event => void toggleComments(event.target.value)}>{scheduledTasks.filter(item => item.recurrenceId === task.recurrenceId).sort((a, b) => (b.recurrenceDate ?? b.dueDate ?? "").localeCompare(a.recurrenceDate ?? a.dueDate ?? "")).map(item => <option key={item.id} value={item.id}>{(item.recurrenceDate ?? item.dueDate)?.slice(0, 10) ?? "Original task"} — {statusLabels[item.status]}</option>)}</select></label>
+          </section> : null}
           {isAdmin ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} onDelete={() => deleteTask(task)} /> : null}
           {isAdmin ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}
           <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatCompanyTaskSchedule(task.schedule)}</p>

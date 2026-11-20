@@ -1,11 +1,13 @@
 import { isCompanyTaskOverdue, type LeaveDaysByEmployee } from "./company-workdays.ts";
+import { companyTaskSnapshot } from "./company-task-series.ts";
 
 export { employeeDayKey } from "./company-workdays.ts";
 
-type Task = { status: string; startDate?: Date | string | null; dueDate: Date | string | null; assigneeId?: string | null };
+type Task = { id?: string; recurrenceId?: string | null; recurrenceDate?: Date | string | null; recurrence?: { isActive: boolean; endDate: Date | string | null } | null; status: string; startDate?: Date | string | null; dueDate: Date | string | null; assigneeId?: string | null };
 const terminal = new Set(["APPROVED", "DONE", "CANCELLED", "REJECTED"]);
 
-export function summarizeEmployeeWork(tasks: readonly Task[], today: string, leaveByEmployee: LeaveDaysByEmployee = {}) {
+export function summarizeEmployeeWork(taskRows: readonly Task[], today: string, leaveByEmployee: LeaveDaysByEmployee = {}) {
+  const tasks = companyTaskSnapshot(taskRows, today);
   const completed = tasks.filter(task => task.status === "APPROVED" || task.status === "DONE").length;
   return {
     assigned: tasks.length,

@@ -19,6 +19,8 @@ The performance page reports manager-rated work quality and current task activit
 
 ## Rating criteria and bands
 
+A recurring company task counts as one distinct task per employee across all daily submissions. Its latest eligible rated review in the selected period contributes to the quality score. Daily reviews, ratings, feedback, images, and approvals remain independent and available in history. Repeating the same task cannot satisfy the five-distinct-task threshold by itself.
+
 Ratings must be deliberately selected for each submission; no rating is preselected or carried over to a resubmission. Written feedback is required. The API rejects stale submissions and concurrent task changes before saving a rating. Managers assess quality against the task's agreed acceptance criteria:
 
 1. Does not meet requirements: major omissions or errors, substantial rework needed.

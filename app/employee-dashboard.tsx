@@ -1,3 +1,4 @@
+import { companyTaskSnapshot } from "@/lib/company-task-series";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, ClipboardCheck, Clock3, ListChecks, Star, TriangleAlert } from "lucide-react";
 import WorkspacePageHeading from "@/app/workspace-page-heading";
@@ -7,11 +8,12 @@ import type { ReviewQualitySummary } from "@/lib/review-quality";
 import UserAvatar from "@/app/user-avatar";
 import { companyTaskSchedule, employeeLeaveDays, isSunday, type LeaveDaysByEmployee } from "@/lib/company-workdays";
 
-type Task = { id: string; title: string; status: string; startDate: Date | string | null; dueDate: Date | string | null };
+type Task = { recurrenceId?: string | null; recurrenceDate?: Date | string | null; recurrence?: { isActive: boolean; endDate: Date | string | null } | null; id: string; title: string; status: string; startDate: Date | string | null; dueDate: Date | string | null };
 type Feedback = { id: string; feedback: string; rating: number | null; reviewer: string; reviewerAvatarUrl?: string | null; taskTitle: string };
 
-export default function EmployeeDashboard({ name, designation, tasks, feedback, quality, employeeId, leaveByEmployee }: { name: string; designation: string; tasks: Task[]; feedback: Feedback[]; quality: ReviewQualitySummary; employeeId: string; leaveByEmployee: LeaveDaysByEmployee }) {
+export default function EmployeeDashboard({ name, designation, tasks: taskRows, feedback, quality, employeeId, leaveByEmployee }: { name: string; designation: string; tasks: Task[]; feedback: Feedback[]; quality: ReviewQualitySummary; employeeId: string; leaveByEmployee: LeaveDaysByEmployee }) {
   const today = employeeDayKey();
+  const tasks = companyTaskSnapshot(taskRows, today);
   const leaveDays = employeeLeaveDays(leaveByEmployee, employeeId);
   const summary = summarizeEmployeeWork(tasks.map(task => ({ ...task, assigneeId: employeeId })), today, leaveByEmployee);
   const metrics = [

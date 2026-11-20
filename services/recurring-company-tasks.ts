@@ -42,7 +42,7 @@ export async function ensureDailyCompanyTasks(now = new Date()) {
       await tx.taskStatusHistory.createMany({ data: occurrences.map(task => ({ taskId: task.id, actorId: rule.createdById ?? rule.assigneeId!, fromStatus: null, toStatus: "TODO" })) });
       await tx.notification.createMany({ data: occurrences.map(task => ({
         userId: rule.assigneeId!, actorId: rule.createdById, projectId: rule.projectId, taskId: task.id,
-        type: "TASK_ASSIGNED", message: `Daily task for ${task.recurrenceDate.toISOString().slice(0, 10)}: "${rule.title}"`, href: `/company-tasks?task=${task.id}`,
+        type: "TASK_COMMENTED", message: `Daily submission ready for ${task.recurrenceDate.toISOString().slice(0, 10)}: "${rule.title}"`, href: `/company-tasks?task=${task.id}`,
       })) });
     }, { timeout: 30_000 });
   }

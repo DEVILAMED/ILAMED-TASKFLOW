@@ -1,3 +1,5 @@
+import { companyTaskSnapshot } from "@/lib/company-task-series";
+import { companyTaskRepeatSelect } from "@/lib/company-task-repeat";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -22,7 +24,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
   if (currentUser.role !== "ADMIN") redirect("/dashboard");
   await ensureDailyCompanyTasks();
   const period = getReviewPeriod();
-  const [userRows, departments, tasks, reviews] = await Promise.all([
+  const [userRows, departments, taskRows, reviews] = await Promise.all([
     prisma.user.findMany({
       orderBy: [{ name: "asc" }, { email: "asc" }],
       select: { id: true, name: true, email: true, avatar: true, role: true, isBlocked: true, createdAt: true, lastSeenAt: true,
@@ -30,7 +32,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
       },
     }),
     prisma.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID }, select: { assigneeId: true, status: true } }),
+    prisma.task.findMany({ where: { projectId: COMPANY_TASK_PROJECT_ID }, select: { ...companyTaskRepeatSelect, id: true, dueDate: true, assigneeId: true, status: true } }),
     getReviewEvidence(period),
   ]);
   const selectedDepartment = resolveDepartmentFilter((await searchParams).department, departments);
@@ -44,7 +46,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
     <div className="workspace-view"><WorkspacePageHeading kicker="ROSTER" title="Team" description={`Review quality: ${period.label.toLowerCase()} (${period.startDay} to ${period.endDay}, India time). At least ${MIN_REVIEWED_TASKS} distinct reviewed tasks per employee; task totals show current assignments.`} />
       <AdminDepartmentSwitcher departments={departments} selectedDepartment={selectedDepartment} />
       <section className="workspace-team-grid" aria-label="Team members">{teamMembers.map(employee => {
-        const assigned = tasks.filter(task => task.assigneeId === employee.id);
+        const assigned = companyTaskSnapshot(taskRows.filter(task => task.assigneeId === employee.id));
         const done = assigned.filter(task => ["APPROVED","DONE"].includes(task.status)).length;
         const pending = assigned.filter(task => !["APPROVED","DONE","REJECTED","CANCELLED"].includes(task.status)).length;
         const quality = qualityByEmployee.get(employee.id);

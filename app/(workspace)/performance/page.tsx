@@ -1,3 +1,5 @@
+import { companyTaskSnapshot } from "@/lib/company-task-series";
+import { companyTaskRepeatSelect } from "@/lib/company-task-repeat";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +26,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
   const [tasks, reviews, employee] = await Promise.all([
     prisma.task.findMany({
       where: { projectId: COMPANY_TASK_PROJECT_ID, ...(employeeIds === undefined ? {} : { assigneeId: { in: employeeIds } }) },
-      select: { status: true, priority: true, startDate: true, dueDate: true, assigneeId: true },
+      select: { ...companyTaskRepeatSelect, id: true, status: true, priority: true, startDate: true, dueDate: true, assigneeId: true },
     }),
     getReviewEvidence(period, employeeIds),
     target ? prisma.user.findUnique({ where: { id: target }, select: { ...USER_IDENTITY_SELECT, employeeProfile: { select: { designation: true } } } }) : null,
@@ -39,5 +41,5 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     title={employee ? employee.name || employee.email : "Team Performance"}
     avatarUrl={employee ? userAvatarUrl(employee.id, employee.avatar) : null}
     description={personal ? employee?.employeeProfile?.designation || "My Performance" : "Manager review quality and current task activity."}
-    tasks={tasks} reviews={reviews} />;
+    tasks={companyTaskSnapshot(tasks)} reviews={reviews} />;
 }

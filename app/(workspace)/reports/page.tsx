@@ -1,3 +1,5 @@
+import { companyTaskSnapshot } from "@/lib/company-task-series";
+import { companyTaskRepeatSelect } from "@/lib/company-task-repeat";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -61,6 +63,7 @@ export default async function ReportsPage() {
       ...(user.role === "ADMIN" ? {} : { assigneeId: { in: user.role === "MANAGER" ? reportAssigneeIds : [user.id] } }),
     },
     select: {
+      ...companyTaskRepeatSelect,
       id: true,
       assigneeId: true,
       title: true,
@@ -76,7 +79,7 @@ export default async function ReportsPage() {
 
   const today = employeeDayKey();
   const leaveByEmployee = await getLeaveForTasks(taskRows);
-  const tasks = taskRows.map(task => ({
+  const tasks = companyTaskSnapshot(taskRows, today).map(task => ({
     ...task,
     ...companyTaskSchedule(task, employeeLeaveDays(leaveByEmployee, task.assigneeId)),
     overdue: isCompanyTaskOverdue(task, today, leaveByEmployee),
