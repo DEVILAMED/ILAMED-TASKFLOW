@@ -24,8 +24,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (typeof decision !== "string" || !Object.values(ReviewDecision).includes(decision as ReviewDecision)) {
     return NextResponse.json({ ok: false, error: "Choose approve, request revision, or reject." }, { status: 400 });
   }
-  if (!feedback || feedback.length > 2000) {
-    return NextResponse.json({ ok: false, error: "Review feedback must be between 1 and 2000 characters." }, { status: 400 });
+  if ((payload?.feedback != null && typeof payload.feedback !== "string") || feedback.length > 2000) {
+    return NextResponse.json({ ok: false, error: "Review feedback must be text with at most 2000 characters." }, { status: 400 });
   }
   if (!isReviewRating(rating)) {
     return NextResponse.json({ ok: false, error: "Provide a quality rating from 1 to 5." }, { status: 400 });

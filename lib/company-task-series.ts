@@ -15,7 +15,7 @@ const date = (task: SeriesTask) => taskDateKey(task.recurrenceDate) ?? taskDateK
 
 // Daily records carry independent workflow and submission history. Their shared
 // recurrence ID is the identity used for task lists and task totals.
-export function groupCompanyTaskSeries<T extends SeriesTask>(tasks: readonly T[]) {
+export function groupCompanyTaskSeries<T extends SeriesTask>(tasks: readonly T[], preferredDay?: string) {
   const groups = new Map<string, T[]>();
   tasks.forEach((task, index) => {
     const key = task.recurrenceId ? `series:${task.recurrenceId}` : `task:${task.id ?? index}`;
@@ -25,7 +25,8 @@ export function groupCompanyTaskSeries<T extends SeriesTask>(tasks: readonly T[]
   });
   return [...groups.values()].map(entries => {
     const occurrences = entries.slice().sort((a, b) => date(a).localeCompare(date(b)));
-    const task = occurrences.find(item => !closed.has(item.status)) ?? occurrences[occurrences.length - 1];
+    const task = (preferredDay ? occurrences.find(item => date(item) === preferredDay) : undefined)
+      ?? occurrences.find(item => !closed.has(item.status)) ?? occurrences[occurrences.length - 1];
     return { task, occurrences };
   });
 }

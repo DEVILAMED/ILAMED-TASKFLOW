@@ -99,7 +99,7 @@ export default function ReviewQueue() {
     </section>
     <section className="workspace-surface performance-methodology">
       <h2>Quality rating criteria</h2>
-      <p>Assess the submitted work against its agreed acceptance criteria. Select a rating deliberately and describe the evidence in your feedback, including any corrections needed or added value. Consider task complexity and dependencies when discussing delivery.</p>
+      <p>Assess the submitted work against its agreed acceptance criteria and select a rating deliberately. Feedback is optional; you can add evidence, corrections needed, or added value. Consider task complexity and dependencies when discussing delivery.</p>
       <details><summary>View the 1–5 rating guide</summary><ol>{REVIEW_RUBRIC.map(item => <li key={item.rating}><strong>{item.rating}/5 · {item.label}.</strong> {item.description}</li>)}</ol></details>
     </section>
     {error ? <p role="alert" className="feedback-error rounded-xl border p-3 text-sm">{error}</p> : null}
@@ -121,10 +121,10 @@ export default function ReviewQueue() {
       {task.submission ? <SubmissionImageGallery images={task.submission.images} /> : null}
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <label className="grid min-w-0 gap-1 text-xs text-white/50">Quality rating<select className="soft-input h-10 rounded-lg px-2" required value={ratings[reviewKey] ?? ""} onChange={(event) => setRatings((current) => ({ ...current, [reviewKey]: event.target.value }))}><option value="" disabled>Select rating</option>{REVIEW_RUBRIC.map(item => <option key={item.rating} value={item.rating}>{item.rating}/5 · {item.label}</option>)}</select></label>
-        <label className="grid min-w-0 gap-1 text-xs text-white/50">Evidence and feedback<textarea className="soft-input min-h-10 rounded-lg px-3 py-2 text-sm" required maxLength={2000} value={feedback[reviewKey] ?? ""} onChange={(event) => setFeedback((current) => ({ ...current, [reviewKey]: event.target.value }))} placeholder="Explain how the work meets the criteria, corrections needed, or specific added value" /></label>
+        <label className="grid min-w-0 gap-1 text-xs text-white/50">Evidence and feedback (optional)<textarea className="soft-input min-h-10 rounded-lg px-3 py-2 text-sm" maxLength={2000} value={feedback[reviewKey] ?? ""} onChange={(event) => setFeedback((current) => ({ ...current, [reviewKey]: event.target.value }))} placeholder="Add feedback if needed" /></label>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {([["APPROVED", "Approve"], ["REVISION_REQUESTED", "Request revision"], ["REJECTED", "Reject"]] as const).map(([decision, label]) => <button key={decision} type="button" disabled={pending === task.id || !task.submission || !isReviewRating(Number(ratings[reviewKey])) || !(feedback[reviewKey] ?? "").trim()} onClick={() => void review(task, decision)} className="secondary-button px-3 py-2 text-xs font-semibold disabled:opacity-40">{pending === task.id ? "Saving…" : label}</button>)}
+        {([["APPROVED", "Approve"], ["REVISION_REQUESTED", "Request revision"], ["REJECTED", "Reject"]] as const).map(([decision, label]) => <button key={decision} type="button" disabled={pending === task.id || !task.submission || !isReviewRating(Number(ratings[reviewKey]))} onClick={() => void review(task, decision)} className="secondary-button px-3 py-2 text-xs font-semibold disabled:opacity-40">{pending === task.id ? "Saving…" : label}</button>)}
       </div>
     </article>; })}
   </div>;

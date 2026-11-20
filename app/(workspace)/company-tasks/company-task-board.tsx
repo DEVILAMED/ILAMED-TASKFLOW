@@ -171,7 +171,7 @@ export default function CompanyTaskBoard({
       && (priorityFilter === "ALL" || task.priority === priorityFilter)
       && (dueFilter === "ALL" || (dueFilter === "OVERDUE" ? task.overdue : dueFilter === "TODAY" ? scheduledToday(task) : Boolean(task.dueDate)));
   }).sort((a, b) => sort === "priority" ? (["HIGH", "MEDIUM", "LOW"].indexOf(a.priority) - ["HIGH", "MEDIUM", "LOW"].indexOf(b.priority)) : sort === "updated" ? b.updatedAt.localeCompare(a.updatedAt) : (a.schedule.dueDate || "9999").localeCompare(b.schedule.dueDate || "9999"));
-  const visibleTasks = view === "calendar" ? matchingTasks : groupCompanyTaskSeries(matchingTasks).map(group => group.task);
+  const visibleTasks = view === "calendar" ? matchingTasks : groupCompanyTaskSeries(matchingTasks, today).map(group => group.task);
 
   useEffect(() => {
     let lastRefresh = 0;
