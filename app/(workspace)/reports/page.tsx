@@ -9,6 +9,7 @@ import { formatTaskDateRange } from "@/lib/task-dates";
 import { companyTaskSchedule, employeeDayKey, employeeLeaveDays, isCompanyTaskOverdue } from "@/lib/company-workdays";
 import { getLeaveForTasks } from "@/services/employee-leave";
 import { ensureDailyCompanyTasks } from "@/services/recurring-company-tasks";
+import type { ReportTask } from "@/lib/performance-report";
 
 const STATUS_ROWS = [
   { key: "TODO", label: "Not started", color: "bg-slate-400" },
@@ -67,12 +68,25 @@ export default async function ReportsPage() {
       id: true,
       assigneeId: true,
       title: true,
+      description: true,
       status: true,
       priority: true,
       createdAt: true,
       startDate: true,
       dueDate: true,
-      assignee: { select: { id: true, name: true, email: true, employeeProfile: { select: { department: { select: { id: true, name: true } } } } } },
+      assignedBy: { select: { id: true, name: true, email: true, role: true } },
+      assignee: { select: { id: true, name: true, email: true, employeeProfile: { select: { employeeCode: true, designation: true, department: { select: { id: true, name: true } } } } } },
+      checklistItems: { orderBy: { position: "asc" }, select: { title: true, isCompleted: true } },
+      statusHistory: { orderBy: { createdAt: "asc" }, select: { fromStatus: true, toStatus: true, createdAt: true, actor: { select: { name: true, email: true } } } },
+      comments: { orderBy: { createdAt: "asc" }, select: { content: true, createdAt: true, user: { select: { name: true, email: true } } } },
+      submissions: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          submittedById: true, notes: true, createdAt: true, submittedBy: { select: { name: true, email: true } },
+          images: { select: { fileName: true } }, attachments: { select: { fileName: true } },
+          reviews: { orderBy: { createdAt: "asc" }, select: { id: true, decision: true, rating: true, feedback: true, createdAt: true, reviewer: { select: { name: true, email: true } } } },
+        },
+      },
     },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
   });
@@ -131,9 +145,37 @@ export default async function ReportsPage() {
     .sort((left, right) => left.dueDate!.localeCompare(right.dueDate!))
     .slice(0, 6);
 
+  // Exports retain every daily occurrence; the analytics above use a series snapshot.
+  const reportTasks: ReportTask[] = taskRows.map(task => {
+    const schedule = companyTaskSchedule(task, employeeLeaveDays(leaveByEmployee, task.assigneeId));
+    const profile = task.assignee?.employeeProfile;
+    return {
+      id: task.id, title: task.title, description: task.description,
+      assignee: employeeName(task.assignee), assigneeId: task.assigneeId ?? "UNASSIGNED", email: task.assignee?.email ?? "",
+      employeeCode: profile?.employeeCode ?? "", designation: profile?.designation ?? "",
+      departmentId: profile?.department?.id ?? "UNASSIGNED", department: profile?.department?.name ?? "Unassigned department",
+      dueDate: schedule.dueDate, originalDueDate: task.dueDate?.toISOString().slice(0, 10) ?? null,
+      status: task.status, priority: task.priority,
+      startDate: schedule.startDate ? formatDueDate(schedule.startDate) : "Not set",
+      deadline: schedule.dueDate ? formatDueDate(schedule.dueDate) : "No deadline", workingDays: schedule.workingDays,
+      createdAt: task.createdAt.toISOString(), recurrenceDate: task.recurrenceDate?.toISOString().slice(0, 10) ?? null,
+      overdue: isCompanyTaskOverdue(task, today, leaveByEmployee),
+      source: task.assignedBy?.id === task.assigneeId ? "Self-created" : task.assignedBy?.role === "ADMIN" ? "Admin-assigned" : task.assignedBy?.role === "MANAGER" ? "Manager-assigned" : task.assignedBy ? "Assigned by another employee" : "Not recorded",
+      assignedBy: task.assignedBy ? employeeName(task.assignedBy) : "Not recorded",
+      checklist: task.checklistItems,
+      history: task.statusHistory.map(item => ({ fromStatus: item.fromStatus, toStatus: item.toStatus, createdAt: item.createdAt.toISOString(), actor: employeeName(item.actor) })),
+      comments: task.comments.map(item => ({ content: item.content, createdAt: item.createdAt.toISOString(), author: employeeName(item.user) })),
+      submissions: task.submissions.map(item => ({
+        submittedById: item.submittedById, submittedBy: employeeName(item.submittedBy), createdAt: item.createdAt.toISOString(), notes: item.notes,
+        files: [...item.images, ...item.attachments].map(file => file.fileName),
+        reviews: item.reviews.map(review => ({ id: review.id, decision: review.decision, rating: review.rating, feedback: review.feedback, createdAt: review.createdAt.toISOString(), reviewer: employeeName(review.reviewer) })),
+      })),
+    };
+  });
+
   return (
     <>
-      <ReportDownloads tasks={tasks.map(task => ({ title: task.title, assignee: employeeName(task.assignee), assigneeId: task.assignee?.id ?? "UNASSIGNED", departmentId: task.assignee?.employeeProfile?.department?.id ?? "UNASSIGNED", department: task.assignee?.employeeProfile?.department?.name ?? "Unassigned department", dueDate: task.dueDate, status: task.status, priority: task.priority, startDate: task.startDate ? formatDueDate(task.startDate) : "Not set", deadline: task.dueDate ? formatDueDate(task.dueDate) : "No deadline", workingDays: task.workingDays, createdAt: task.createdAt.toISOString() }))} />
+      <ReportDownloads tasks={reportTasks} />
       <details className="workspace-additional"><summary>View all-time task analytics</summary>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
         <section className="panel-card rounded-3xl p-5 sm:p-7">
