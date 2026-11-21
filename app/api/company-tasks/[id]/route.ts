@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { COMPANY_TASK_PROJECT_ID } from "@/services/company-tasks";
 
 import { canChangeCompanyTaskStatus } from "@/lib/company-task-workflow";
-import { canEditOwnCompanyTask, deleteManagedCompanyTask, parseCompanyTaskDetails, validateCompanyTaskUpdateFields, validateCompanyTaskDateRange } from "@/lib/company-task-management";
+import { canEditOwnCompanyTask, deleteManagedCompanyTask, parseCompanyTaskChecklist, parseCompanyTaskDetails, validateCompanyTaskUpdateFields, validateCompanyTaskDateRange } from "@/lib/company-task-management";
 import { companyTaskAccessWhere } from "@/lib/company-task-access";
 import { validateSubmissionImages } from "@/lib/submission-images";
 import { MAX_SUBMISSION_UPLOAD_BYTES, validateSubmissionAttachments } from "@/lib/submission-attachments";
@@ -83,6 +83,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const priority = payload?.priority;
   const assigneeId = payload?.assigneeId;
   const details = parseCompanyTaskDetails(payload);
+  const checklist = payload.checklistItems === undefined ? undefined : parseCompanyTaskChecklist(payload.checklistItems);
+  if (checklist && !checklist.ok) return NextResponse.json({ ok: false, error: checklist.error }, { status: 400 });
   if (!details.ok) {
     return NextResponse.json({ ok: false, error: details.error }, { status: 400 });
   }
@@ -111,7 +113,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
     }
   }
-  if (!reportBlocker && status === undefined && priority === undefined && nextAssigneeId === undefined && !Object.keys(details.data).length) {
+  if (!reportBlocker && status === undefined && priority === undefined && nextAssigneeId === undefined && checklist === undefined && !Object.keys(details.data).length) {
     return NextResponse.json({ ok: false, error: "No task updates provided." }, { status: 400 });
   }
 
@@ -132,13 +134,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         projectId: COMPANY_TASK_PROJECT_ID,
         ...companyTaskAccessWhere(user),
       },
-      select: { id: true, title: true, description: true, priority: true, createdById: true, archivedAt: true, assigneeId: true, assignee: { select: { name: true, email: true } }, assignedById: true, status: true, startDate: true, dueDate: true, updatedAt: true, checklistItems: { orderBy: { position: "asc" }, select: { title: true, isCompleted: true } } },
+      select: { id: true, title: true, description: true, priority: true, createdById: true, archivedAt: true, assigneeId: true, assignee: { select: { name: true, email: true } }, assignedById: true, status: true, startDate: true, dueDate: true, updatedAt: true, checklistItems: { orderBy: { position: "asc" }, select: { id: true, title: true, isCompleted: true } } },
     });
     if (!existing) return null;
     if (existing.archivedAt) return { fieldAccessError: { status: 409, error: "Unarchive this task before making changes." } };
 
     const fieldAccess = validateCompanyTaskUpdateFields(user.role, submittedKeys, canEditOwnCompanyTask(user.id, existing));
     if (!fieldAccess.ok) return { fieldAccessError: fieldAccess };
+
+    if (checklist?.ok) {
+      if (!["TODO", "ACCEPTED", "IN_PROGRESS", "REVISION_REQUESTED"].includes(existing.status)) {
+        return { fieldAccessError: { status: 409, error: "Checklist editing is only available before submission or when revisions are requested." } };
+      }
+      if (checklist.items.some(item => item.id && !existing.checklistItems.some(saved => saved.id === item.id))) {
+        return { fieldAccessError: { status: 400, error: "A checklist item does not belong to this task. Refresh and try again." } };
+      }
+    }
 
     if (existing.status === TaskStatus.SUBMITTED_FOR_REVIEW && nextAssigneeId !== undefined && nextAssigneeId !== existing.assigneeId) {
       return { assignmentError: true as const };
@@ -175,6 +186,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       },
       data: {
         ...details.data,
+        ...(checklist?.ok ? { checklistItems: {
+          deleteMany: { id: { notIn: checklist.items.flatMap(item => item.id ? [item.id] : []) } },
+          update: checklist.items.flatMap((item, position) => item.id ? [{ where: { id: item.id }, data: { title: item.title, position } }] : []),
+          create: checklist.items.flatMap((item, position) => item.id ? [] : [{ title: item.title, position, isCompleted: false }]),
+        } } : {}),
         ...(status === undefined ? {} : { status: status as TaskStatus }),
         ...(priority === undefined ? {} : { priority: priority as "LOW" | "MEDIUM" | "HIGH" }),
         ...(nextAssigneeId === undefined ? {} : { assigneeId: nextAssigneeId }),
@@ -338,9 +354,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 export async function DELETE(_request: Request, { params }: RouteContext) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
-  if (user.role !== UserRole.ADMIN) {
-    return NextResponse.json({ ok: false, error: "Administrator access is required to delete tasks." }, { status: 403 });
-  }
   const { id } = await params;
   try {
     const result = await prisma.$transaction(

@@ -9,7 +9,7 @@ import { getChecklistProgress } from "@/lib/task-progress";
 import { taskDateKey, taskIsScheduledOn } from "@/lib/task-dates";
 import { companyScheduleOverlaps, companyTaskSchedule, employeeDayKey, employeeLeaveDays, formatCompanyTaskSchedule, isCompanyTaskOverdue, isCompanyWorkday, isSunday, type LeaveDaysByEmployee } from "@/lib/company-workdays";
 import CompanyTaskEditor, { type CompanyTaskChanges } from "@/app/company-task-editor";
-import { canEditOwnCompanyTask } from "@/lib/company-task-management";
+import { canDeleteOwnCompanyTask, canEditOwnCompanyTask } from "@/lib/company-task-management";
 import SubmissionFilePicker from "@/app/submission-file-picker";
 import SubmissionImagePicker from "@/app/submission-image-picker";
 import TaskSubmissionHistory from "@/app/task-submission-history";
@@ -615,7 +615,7 @@ export default function CompanyTaskBoard({
             </label>
             <datalist id="task-work-dates">{activeSeriesTasks.map(item => <option key={item.id} value={taskDateKey(item.recurrenceDate ?? item.dueDate) ?? ""} label={statusLabels[item.status]} />)}</datalist>
           </section> : null}
-          {!task.archivedAt && (isAdmin || canEditOwnCompanyTask(employeeId, { createdById: task.createdById, assigneeId: task.assignee?.id })) ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} allowAssignment={isAdmin} onDelete={isAdmin ? () => deleteTask(task) : undefined} /> : null}
+          {!task.archivedAt && (isAdmin || canDeleteOwnCompanyTask(employeeId, task)) ? <CompanyTaskEditor task={task} employees={employees} pending={pendingId === task.id} onSave={(changes) => editTask(task, changes)} allowAssignment={isAdmin} allowEditing={isAdmin || canEditOwnCompanyTask(employeeId, { createdById: task.createdById, assigneeId: task.assignee?.id })} onDelete={() => deleteTask(task)} /> : null}
           {isAdmin && !task.archivedAt ? <CompanyTaskRepeatControl task={task} /> : task.recurrenceId ? <p className="text-sm text-[var(--accent)]">Daily task{task.recurrenceDate ? ` for ${task.recurrenceDate.slice(0, 10)}` : ""}. Submit each day&apos;s work separately.</p> : null}
           <p className="text-sm text-[var(--muted)]">{statusLabels[task.status]} / {priorityLabels[task.priority]} priority / {formatCompanyTaskSchedule(task.schedule)}</p>
           {task.schedule.dueDate !== taskDateKey(task.dueDate) ? <p className="text-xs text-[var(--muted)]">Original deadline {taskDateKey(task.dueDate)}. The displayed schedule accounts for Sundays and recorded leave.</p> : null}

@@ -13,9 +13,33 @@ export function canEditOwnCompanyTask(userId: string | undefined, task: { create
   return !!userId && task.createdById === userId && task.assigneeId === userId;
 }
 
+export function canDeleteOwnCompanyTask(userId: string | undefined, task: { createdById?: string | null }) {
+  return !!userId && task.createdById === userId;
+}
+
+export type ChecklistEdit = { id?: string; title: string };
+
+export function parseCompanyTaskChecklist(value: unknown):
+  { ok: true; items: ChecklistEdit[] } | { ok: false; error: string } {
+  if (!Array.isArray(value) || value.length > 20) return { ok: false, error: "Add up to 20 checklist items." };
+  const items: ChecklistEdit[] = [];
+  const ids = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)
+      || Object.keys(item).some(key => !["id", "title"].includes(key))
+      || typeof item.title !== "string" || !item.title.trim() || item.title.trim().length > 200
+      || (item.id !== undefined && (typeof item.id !== "string" || !item.id || ids.has(item.id)))) {
+      return { ok: false, error: "Each checklist item needs a unique ID and a title between 1 and 200 characters." };
+    }
+    if (item.id !== undefined) ids.add(item.id);
+    items.push({ ...(item.id === undefined ? {} : { id: item.id }), title: item.title.trim() });
+  }
+  return { ok: true, items };
+}
+
 export function validateCompanyTaskUpdateFields(role: string, fields: string[], ownsTask = false):
   { ok: true } | { ok: false; status: 400 | 403; error: string } {
-  const administratorFields = ["title", "description", "startDate", "dueDate", "priority", "assigneeId"];
+  const administratorFields = ["title", "description", "startDate", "dueDate", "priority", "assigneeId", "checklistItems"];
   if (role !== "ADMIN" && fields.some((field) => administratorFields.includes(field) && (!ownsTask || field === "assigneeId"))) {
     return { ok: false, status: 403, error: "You can only edit details of tasks you created for yourself. Only administrators can change assignments." };
   }
@@ -73,12 +97,14 @@ export async function deleteManagedCompanyTask(
   projectId: string,
 ) {
   if (!actor) return { ok: false, status: 401, error: "Unauthorized." };
-  if (actor.role !== "ADMIN") return { ok: false, status: 403, error: "Administrator access is required to delete tasks." };
   const task = await transaction.task.findFirst({
     where: { id: taskId, projectId, deletedAt: null },
-    select: { id: true, title: true, assigneeId: true, updatedAt: true },
+    select: { id: true, title: true, createdById: true, assigneeId: true, updatedAt: true },
   });
   if (!task) return { ok: false, status: 404, error: "Task not found." };
+  if (actor.role !== "ADMIN" && !canDeleteOwnCompanyTask(actor.id, task)) {
+    return { ok: false, status: 403, error: "You can only delete tasks you created." };
+  }
 
   const deletedAt = new Date();
   await transaction.task.update({ where: { id: task.id, projectId, deletedAt: null, updatedAt: task.updatedAt }, data: { deletedAt } });
